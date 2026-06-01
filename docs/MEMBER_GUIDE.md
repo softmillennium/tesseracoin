@@ -87,7 +87,7 @@ From the main view, the **Send** card has three fields:
   validates the checksum before submitting; a malformed address
   fails immediately, no chain round-trip.
 - **Amount (TESC)** — the value to transfer. 1 TESC = 100 000 000
-  satoshis (the chain's smallest unit).
+  tiles (the chain's smallest unit).
 - **Fee (TESC)** — leave blank for the suggested fee (a smoothed
   median of recent blocks). Override only if a priority send is
   needed.
