@@ -324,8 +324,11 @@ The authority of the *higher* tip governs comparison. If two competing tips live
    to peers but before the block is confirmed? Current design: no (pledge is committed into the
    block being mined).
 
-5. **ICO / initial distribution** — the whitepaper proposes 10% of initial supply to investor
-   holders via scheduled airdrop. Mechanism and vesting schedule not yet designed.
+5. **Initial distribution** — how the genesis supply is introduced into circulation is an
+   open question and is **not yet designed**. No token is being offered, sold, or distributed,
+   and none is available for purchase. Any future distribution scheme would be specified here,
+   would be a utility allocation within a community rather than an investment offering, and
+   would be subject to applicable law in the relevant jurisdictions.
 
 6. **Dynamic pledge and fee adjustment** — the `fee_pledge_fluctuation_graph.py` simulation uses fixed sensitivity parameters (α = 0.0001, β = 0.0002). **Resolved: not adopted as the default.** It was prototyped as the `POWPv3` authority, but its per-block values derive from the validator's chain tip rather than the block's ancestry, which can split consensus — so `POWPv3` is **gated against activation**. The default keeps static, deterministic rules (see *Fee and Pledge Evolution*). A corrected version would commit the rate in the header (EIP-1559 style) or derive it from the block's ancestry.
 

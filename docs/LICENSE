@@ -13,7 +13,9 @@ were made.
 - License summary: https://creativecommons.org/licenses/by/4.0/
 - Full legal text: https://creativecommons.org/licenses/by/4.0/legalcode
 
-The **source code** is licensed separately (Apache-2.0) and ships with the code
-release — see the repository `LICENSE`.
+The **source code** is not yet publicly released. When it is released, it is
+intended to be licensed separately under the **Apache-2.0** license, which will
+ship with the code in the repository `LICENSE`. Until then, all rights in the
+source code are reserved.
 
 © 2026 SoftMillennium.
