@@ -5,9 +5,9 @@
 **A community-first digital currency that rewards participation — energy-light, future-proof, and built to last.**
 
 > A *tessera* was a small mosaic tile — and, in ancient Rome, a token handed
-> out for charitable grain distributions and public lottery draws. Many small
-> pieces forming a greater whole; a token for giving and for chance. That is
-> exactly what Tesseracoin is built to be.
+> out at public distributions to ordinary citizens. Many small pieces forming a
+> greater whole; many contributors, one shared community. That is exactly what
+> Tesseracoin is built to be.
 
 ---
 
@@ -43,22 +43,23 @@ of control, and a public, tamper-evident record everyone can audit.
   governed, on-chain process — software-style releases, not community schisms.
 - **Storage that scales down to your device.** Nodes can run light or share the
   load of history, so participation never demands a data centre.
-- **Sound, capped money.** A fixed supply of 21,000,000 on a predictable
+- **Predictable, capped supply.** A fixed supply of 21,000,000 on a predictable
   schedule — and 60-second blocks.
 
 <p align="center"><img src="assets/supply.png" alt="Capped, predictable supply approaching a 21,000,000 hard cap" width="640"></p>
 
 ## What you can build on it
 
-- **A private community / family currency** — exchangeable for real value
-  within a group you trust; a resilient, self-run store of value.
-- **Charitable crowdfunding with a donor reward** — fund a cause *and* become
-  eligible for a random thank-you payout from the pool. No platform fee, and
-  every donation and draw is publicly verifiable.
-- **A community lottery / raffle** — where sustained participation, not a
-  one-time ticket, keeps you eligible.
+- **A private community / family currency** — usable for real goods, dues, and
+  favours within a group you trust; a resilient medium of exchange the community
+  runs itself.
+- **Transparent community fundraising** — pool contributions for a shared cause
+  with no platform fee; every contribution and disbursement is publicly
+  verifiable on-chain.
+- **Dues, splits & shared costs** — collect club dues, split shared expenses, or
+  run a group treasury, settled member-to-member with a public record.
 
-<p align="center"><img src="assets/crowdfunding.png" alt="Charitable crowdfunding flow with a randomized donor reward" width="660"></p>
+<p align="center"><img src="assets/crowdfunding.png" alt="Transparent community fundraising flow" width="660"></p>
 
 ## A peek under the hood
 
@@ -95,15 +96,15 @@ proportion to what it stores, or a lightweight wallet — all on the same networ
 Tesseracoin is an advanced, extensively tested **prototype** in active private
 development. A multi-node network already runs end-to-end. The source code is
 private for now; this repository is a **preview** of what's coming. The next
-major milestone is a friendly web app so anyone can take part — donate, win,
-and transact — without touching the technology underneath.
+major milestone is a friendly web app so anyone can take part — send, receive,
+and contribute — without touching the technology underneath.
 
 ## Roadmap (high level)
 
 - ✓ Core protocol — hybrid consensus, random rewards, governed upgrades
 - ✓ Future-proof (post-quantum) cryptography
 - ✓ Lightweight participation — light clients and shared-history storage
-- ◷ Web app for charitable crowdfunding & community lotteries
+- ◷ Web app for community payments & fundraising
 - ◷ Programmable features (smart contracts, collectibles)
 
 ## Documentation
