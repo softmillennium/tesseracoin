@@ -29,7 +29,7 @@ benefit from active participation in the network.
 
 To produce a valid block, a miner must:
 
-1. Solve a PoW puzzle (Bitcoin-style, difficulty-adjusted SHA-256)
+1. Solve a difficulty-adjusted SHA-256 proof-of-work puzzle
 2. Submit a **signed pledge** — an economic commitment from their wallet balance, locked against
    winning the block
 
@@ -125,7 +125,7 @@ The reward split is enforced at block construction time: `_mine_block` builds th
 | Target block time | 60 seconds |
 | Difficulty adjustment | Every 2,016 blocks |
 | Divisibility | 8 decimal places (2.1 quadrillion base units) |
-| Fee rate (floor) | 0.00001 TESC per kB (1 tile/B) |
+| Fee rate (floor) | 0.00001 TESC per kB (1 tile/B, Bitcoin minrelay parity) |
 | Max transactions per block | 100 |
 
 The 8-decimal divisibility (giving 2.1 × 10¹⁵ base units) ensures sufficient granularity
@@ -223,7 +223,7 @@ plus a tip market, not by a dynamic floor.
 
 ### Done
 
-- Bitcoin-style PoW with Bitcoin-style difficulty adjustment (every 2,016 blocks, ±4× cap)
+- SHA-256 proof-of-work with difficulty retargeting every 2,016 blocks (±4× cap), as in Bitcoin
 - Pledge creation, signing, verification, and fork-choice weighting
 - VRF seed committed in block header, verified at validation time
 - Active participant tracking (`is_active`, `eligible_proposers`)
