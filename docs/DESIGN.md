@@ -119,13 +119,13 @@ The reward split is enforced at block construction time: `_mine_block` builds th
 
 | Parameter | Value |
 |---|---|
-| Maximum supply | 21,000,000 TSR |
-| Initial block reward | 5 TSR |
+| Maximum supply | 21,000,000 TESC |
+| Initial block reward | 5 TESC |
 | Halving interval | 2,000,000 blocks |
 | Target block time | 60 seconds |
 | Difficulty adjustment | Every 2,016 blocks |
 | Divisibility | 8 decimal places (2.1 quadrillion base units) |
-| Fee rate (floor) | 0.00001 TSR per kB (1 sat/B, Bitcoin minrelay parity) |
+| Fee rate (floor) | 0.00001 TESC per kB (1 sat/B, Bitcoin minrelay parity) |
 | Max transactions per block | 100 |
 
 The 8-decimal divisibility (giving 2.1 × 10¹⁵ base units) ensures sufficient granularity
@@ -199,7 +199,7 @@ plus a tip market, not by a dynamic floor.
   (the default — compact signatures), and post-quantum `dilithium2` (FIPS 204 ML-DSA-44, via
   liboqs). Each wallet records its scheme and the address encodes which one it uses, so all
   three can coexist on one chain.
-- **Address format**: bech32, HRP `tsr` — e.g. `tsr1q...`, derived from `sha256(pubkey)[:20]`
+- **Address format**: bech32, HRP `tesc` — e.g. `tesc1q...`, derived from `sha256(pubkey)[:20]`
   with witness version 0
 - **Chain ID**: 670210 — included in every transaction signing payload to prevent cross-chain replay
 - **Block signature**: the miner signs `hash_for_pow(header)` (not the full header hash, so the

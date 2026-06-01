@@ -223,14 +223,14 @@ Response (excerpt):
 ```json
 {
   "peers": {
-    "tsr1...alice": [1, 2, 3, 4],
-    "tsr1...bob":   [1, 2, 3, 4],
-    "tsr1...carol": [1, 2],            // outdated — missing 3 and 4
-    "tsr1...dan":   [1, 2, 3, 4]
+    "tesc1...alice": [1, 2, 3, 4],
+    "tesc1...bob":   [1, 2, 3, 4],
+    "tesc1...carol": [1, 2],            // outdated — missing 3 and 4
+    "tesc1...dan":   [1, 2, 3, 4]
   },
   "pending_consensus_ids": [4],
   "missing_for_pending": {
-    "tsr1...carol": [4]                // ABORT: do not sign yet
+    "tesc1...carol": [4]                // ABORT: do not sign yet
   },
   "discovery_available": true
 }
@@ -552,8 +552,8 @@ Decay: every 60 seconds, all scores halve; entries below 1.0 are dropped.
 
 ```json
 {
-  "scores": {"tsr1q...": 25.0, "tsr1q...": 5.5},
-  "bans":   {"tsr1qbad...": 1716843200.5},
+  "scores": {"tesc1q...": 25.0, "tesc1q...": 5.5},
+  "bans":   {"tesc1qbad...": 1716843200.5},
   "threshold": 100
 }
 ```

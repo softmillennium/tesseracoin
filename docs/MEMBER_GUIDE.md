@@ -64,7 +64,7 @@ Confirm. A new keypair is generated locally; the wallet enters the
 
 ### Step 3 — share the address
 
-The **Receive** card shows a `tsr1q…` address. Anyone on the same
+The **Receive** card shows a `tesc1q…` address. Anyone on the same
 cluster can send funds to it. Copy with the **Copy address** button
 or just select-and-copy.
 
@@ -83,12 +83,12 @@ own refresh cycle).
 
 From the main view, the **Send** card has three fields:
 
-- **Recipient address** — paste a `tsr1q…` address. The wallet
+- **Recipient address** — paste a `tesc1q…` address. The wallet
   validates the checksum before submitting; a malformed address
   fails immediately, no chain round-trip.
-- **Amount (TSR)** — the value to transfer. 1 TSR = 100 000 000
+- **Amount (TESC)** — the value to transfer. 1 TESC = 100 000 000
   satoshis (the chain's smallest unit).
-- **Fee (TSR)** — leave blank for the suggested fee (a smoothed
+- **Fee (TESC)** — leave blank for the suggested fee (a smoothed
   median of recent blocks). Override only if a priority send is
   needed.
 
@@ -107,7 +107,7 @@ The wallet exists in two places:
 2. **As an exported file** — same encrypted envelope, downloadable.
 
 To export, click **Export wallet (encrypted)** from the footer. The
-download is a `.tsr-wallet.json` file. Store it safely: a USB drive,
+download is a `.tesc-wallet.json` file. Store it safely: a USB drive,
 encrypted backup, password manager attachment.
 
 To restore in another browser, open the wallet URL, click **Import
