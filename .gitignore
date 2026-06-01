@@ -1,0 +1,38 @@
+.DS_Store
+
+# TLS certs/keys are generated locally per operator — never commit them.
+nginx/ssl/
+
+# Runtime data, logs, caches (mirrored excludes from upstream).
+data/
+logs/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+__pycache__/
+*.py[cod]
+.env
+
+# --- Docs-first preview ---------------------------------------------------
+# The source and runnable config are synced into this working tree but are NOT
+# yet published — the code and its license land at a later stage. Only docs/,
+# README.md, assets/, and genesis/GENESIS_CEREMONY.md are meant to be committed.
+# These rules stop an accidental `git add -A` from leaking the code early.
+tesseracoin/
+scripts/
+schemas/
+tools/
+website/
+discovery/
+nginx/
+Dockerfile
+docker-compose*.yaml
+deploy.sh
+.env.example
+node_config.json
+requirements*.txt
+Makefile
+# Keep the genesis ceremony doc (operator docs link to it); hide the script.
+genesis/*
+!genesis/GENESIS_CEREMONY.md
