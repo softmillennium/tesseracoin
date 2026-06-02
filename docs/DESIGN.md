@@ -119,16 +119,16 @@ The reward split is enforced at block construction time: `_mine_block` builds th
 
 | Parameter | Value |
 |---|---|
-| Maximum supply | 21,000,000 TESC |
-| Initial block reward | 5 TESC |
+| Maximum supply | 1,000,000,000 TESC |
+| Initial block reward | 250 TESC |
 | Halving interval | 2,000,000 blocks |
 | Target block time | 60 seconds |
 | Difficulty adjustment | Every 2,016 blocks |
-| Divisibility | 8 decimal places (2.1 quadrillion base units) |
-| Fee rate (floor) | 0.00001 TESC per kB (1 tile/B, Bitcoin minrelay parity) |
+| Divisibility | 8 decimal places (10¹⁷ base units) |
+| Fee rate (floor) | 0.0005 TESC per kB (50 tiles/B) |
 | Max transactions per block | 100 |
 
-The 8-decimal divisibility (giving 2.1 × 10¹⁵ base units) ensures sufficient granularity
+The 8-decimal divisibility (giving 10¹⁷ base units) ensures sufficient granularity
 for micropayments, IoT settlement, and cross-border remittance without impractical per-unit
 costs at higher valuations.
 
@@ -142,8 +142,8 @@ per-block controller:
 - **Pledge auto-tapers with the subsidy.** Maximum pledge is 10% of the block
   reward, and the reward halves every 2,000,000 blocks, so the pledge ceiling
   falls in step with the subsidy automatically — no tuning required.
-- **The fee floor is a static anti-spam minimum** (1 tile/B, Bitcoin minrelay
-  parity). Actual miner fee revenue comes from the **market tips** users pay
+- **The fee floor is a static anti-spam minimum** (50 tiles/B, scaled with the
+  reward). Actual miner fee revenue comes from the **market tips** users pay
   above the floor, which grow with adoption and congestion — this is what
   supplements the declining subsidy, the same mechanism Bitcoin relies on.
 

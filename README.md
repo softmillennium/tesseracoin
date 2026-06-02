@@ -43,10 +43,10 @@ of control, and a public, tamper-evident record everyone can audit.
   governed, on-chain process — software-style releases, not community schisms.
 - **Storage that scales down to your device.** Nodes can run light or share the
   load of history, so participation never demands a data centre.
-- **Predictable, capped supply.** A fixed supply of 21,000,000 on a predictable
+- **Predictable, capped supply.** A fixed supply of 1,000,000,000 on a predictable
   schedule — and 60-second blocks.
 
-<p align="center"><img src="assets/supply.png" alt="Capped, predictable supply approaching a 21,000,000 hard cap" width="640"></p>
+<p align="center"><img src="assets/supply.png" alt="Capped, predictable supply approaching a 1,000,000,000 hard cap" width="640"></p>
 
 ## What you can build on it
 
