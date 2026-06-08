@@ -35,6 +35,8 @@ where the trust comes from:
    - The cluster name
    - The owner names + threshold
    - Who will be the operator
+   - The **genesis era** — which consensus era the chain starts on
+     (see "Choosing the genesis era" below)
 2. **Run the ceremony script.** As operator:
    ```bash
    python genesis/ceremony.py
@@ -70,6 +72,32 @@ where the trust comes from:
    ```
 
 After the ceremony, `./deploy.sh up` starts the cluster.
+
+## Choosing the genesis era
+
+The `GENESIS_ID` in `.env` sets which consensus era the chain's first
+block uses. This is a **one-time decision** — changing it later requires
+wiping the chain and re-running the ceremony. Future eras are graduated
+into via a single on-chain activation transaction, not a re-genesis.
+
+| GENESIS_ID | Era | Recommended when |
+|-----------|-----|-----------------|
+| `1` | `PurePoWAuthority` — Pure PoW, 100% coinbase to miner, no stake | **Default.** Start any network here. Any CPU can mine from block 1; no staking infrastructure needed. Activate era 2 later via on-chain tx. |
+| `2` | `POWPStakeAuthority` — PoW + slashable stake + random reward | Start here only if the community is ready to stake from block 1 (staking wallets distributed, min\_stake threshold reachable immediately). |
+| `6` | `POWPStakeBlockRecallAuthority` — era 2 + Proof-of-Access recall | For networks where storage accountability must be enforced from genesis. Requires at least `recall_min_depth=100` blocks before the first recall challenge engages. |
+| `3`, `5`, `7` | SmallNet variants | **Dev and testing only.** Never deploy SmallNet parameters in production — stakes and penalty thresholds are deliberately weak. |
+
+The typical production path is:
+
+```
+GENESIS_ID=1 (PurePoW)  →  activate era 2 (POWP-Stake)  →  activate era 6 (block recall)
+                                                          →  activate era 4 (PoA)
+```
+
+Each `→` is a single `consensus_activation` transaction co-signed by the
+founding multisig at a pre-announced block height — no software upgrade,
+no hard fork, no coordination beyond the M-of-N signing ceremony.
+See `docs/CONSENSUS_UPGRADES.md` for the full activation workflow.
 
 ## Trust model
 

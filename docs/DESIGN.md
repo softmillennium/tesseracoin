@@ -4,7 +4,7 @@
 
 Tesseracoin implements **POWP-Stake** (Proof-of-Work + locked, slashable Stake), a hybrid consensus combining:
 
-- **PoW mining**: SHA-256 puzzle solving with difficulty adjustment every 2,016 blocks (era 1 and 2)
+- **PoW mining**: SHA-256 puzzle solving with **LWMA-1 per-block difficulty retargeting** (every era); no fixed-interval step retarget
 - **Stake layer**: Miners lock real on-chain balance via `stake` and `unstake` transactions, subject to an unbonding window. Equivocation burns the offender's entire locked and unbonding stake and permanently tombstones the address.
 - **Deterministic stake-weighted random reward**: A slice of the block reward goes to a participant other than the miner, selected by `sha256(prev_hash + stake_snapshot)` over all stakers above `min_stake`, weighted by locked stake, excluding the current producer.
 - **Demand-responsive base fee**: Each block header commits a `base_fee_rate` derived from the parent header's rate and the block's fill ratio. Half of collected base fees are burned from supply; the rest goes to the miner. Tips go entirely to the miner and are the priority lever for inclusion in full blocks.
@@ -135,7 +135,7 @@ Tesseracoin's consensus rules live behind a plugin layer (`tesseracoin/consensus
 
 ```
 ConsensusAuthority
-├── DifficultyPolicy       # next_target / difficulty_adjust_interval
+├── DifficultyPolicy       # next_target (LWMA-1 per-block via expected_target)
 ├── RewardSchedule         # coinbase / random_reward / base_fee_rate
 ├── ProposerPolicy         # validate_proposer / active_set
 ├── StakePolicy            # validate_stake / validate_unstake / slashing

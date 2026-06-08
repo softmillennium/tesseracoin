@@ -13,7 +13,7 @@ Start here. These are the operator- and protocol-facing docs.
 ## Understand the protocol
 | Doc | What it covers |
 |---|---|
-| [DESIGN.md](DESIGN.md) | Full protocol design — POWP consensus, PoCRR random rewards, fork choice, economic model, addresses & cryptography |
+| [DESIGN.md](DESIGN.md) | Full protocol design — POWP consensus, random rewards, fork choice, economic model, addresses & cryptography |
 | [CONSENSUS_UPGRADES.md](CONSENSUS_UPGRADES.md) | How the rules change — owner-signed activations, the per-era authority registry, and which authorities are active vs gated |
 
 ## Set up a new network

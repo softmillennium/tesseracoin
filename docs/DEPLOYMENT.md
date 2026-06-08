@@ -12,8 +12,9 @@ sizing, and how to deploy via Docker, Kubernetes, a VM, or bare metal.
 
 ## 1. What you are deploying
 
-One OS process = one **node**. A deployment is a set of nodes plus one
-shared **discovery** service:
+One OS process = one **node**. The simplest deployment is a set of nodes plus one
+shared **discovery** service; the discovery service is optional once nodes know each
+other (see §1.1).
 
 | Component | What it is | Image base | Listens on |
 |---|---|---|---|
@@ -28,6 +29,20 @@ it goes down, existing nodes keep validating, only new joins are affected.
 
 Each node holds its own SQLite database (WAL mode) under `DATA_DIR` —
 **this must be on persistent storage.**
+
+### 1.1 Deployment models at a glance
+
+| Model | Proxy | Discovery | When to use |
+|-------|-------|-----------|-------------|
+| **Docker Compose + nginx + discovery** | nginx (per-host) | yes | Reference. Single-host community deployment; nginx handles TLS and DoS at the HTTP boundary. |
+| **k8s StatefulSet + ingress + discovery** | shared ingress | yes | Multi-host production; standard k8s path with Deployment for discovery + Redis. |
+| **k8s headless Service (no discovery)** | shared ingress | **no** | k8s-native; pod DNS resolves peers directly via headless Service — set `PEERS` from stable pod hostnames; retire the discovery Deployment. |
+| **Direct / pod sidecar (no proxy)** | **none** | optional | Node binds to a public port or a service mesh handles mTLS at the sidecar layer; the built-in rate limiter is the primary DoS gate (see §8.1). |
+| **Static peers (no discovery)** | operator choice | **no** | Small fixed-topology or air-gapped networks; set `PEERS=http://node1:8000,http://node2:8000,…` on each node. |
+
+Regardless of the chosen model, consensus traffic (gossip, sync) is **never** rate-limited —
+the node's built-in rate limiter exempts peer subnets. Only the public read surface
+(`/economics`, `/address/*/transactions`, `/chain`) gets the tight token bucket.
 
 ---
 
@@ -67,7 +82,7 @@ curl -s localhost:8001/status | python -m json.tool
 
 **Production checklist when adapting the compose:**
 - Set a real `DISCOVERY_SECRET` (not `changeme`) on discovery **and** every node.
-- Set `CONSENSUS_GENESIS_ID=1` for production POWP (the dev compose uses `5`,
+- Set `CONSENSUS_GENESIS_ID=2` for production POWP-Stake (the dev compose uses `3`,
   the relaxed small-net gate, for convenience). Wipe data dirs to re-genesis.
 - **Remove the debug port** (`5678` / `DEBUG=true` / `DEBUG_PORT`) — never
   expose debugpy.
@@ -121,7 +136,7 @@ spec:
             - { name: NODE_TYPE, value: miner }
             - { name: DATA_DIR, value: /data }
             - { name: DISCOVERY_URL, value: http://tesseracoin-discovery:8000 }
-            - { name: CONSENSUS_GENESIS_ID, value: "1" }
+            - { name: CONSENSUS_GENESIS_ID, value: "2" }
             - name: DISCOVERY_SECRET
               valueFrom: { secretKeyRef: { name: tesseracoin, key: discovery-secret } }
           ports: [ { containerPort: 8000 } ]
@@ -157,7 +172,7 @@ User=tesseracoin
 WorkingDirectory=/opt/tesseracoin
 Environment=PYTHONPATH=/opt/tesseracoin DATA_DIR=/var/lib/tesseracoin \
             DISCOVERY_URL=https://discovery.example:8000 NODE_TYPE=miner \
-            CONSENSUS_GENESIS_ID=1
+            CONSENSUS_GENESIS_ID=2
 EnvironmentFile=/etc/tesseracoin/secrets.env   # DISCOVERY_SECRET=...
 ExecStart=/opt/tesseracoin/.venv/bin/python scripts/run_node.py
 Restart=always
@@ -182,7 +197,7 @@ per-node deployments. Key knobs:
 | `NODE_TYPE` | `miner` or `user` |
 | `DATA_DIR` / `NODE_CONFIG_PATH` | persistent data dir / config file location |
 | `DISCOVERY_URL` / `DISCOVERY_SECRET` | discovery endpoint + auth token |
-| `CONSENSUS_GENESIS_ID` | genesis era (`1` = production POWP; `5`/`7` = relaxed small-net / recall) |
+| `CONSENSUS_GENESIS_ID` | genesis era: `1`=PurePoW (default genesis), `2`=POWP-Stake, `3`=SmallNet, `5`=POWP-Stake+Recall SmallNet, `6`=POWP-Stake+Recall production, `7`=PoW+Recall SmallNet |
 | `CONSENSUS_PLUGINS` | JSON list of consensus plugin modules to load |
 | `TESSERACOIN_SIGNATURE_SCHEME` | new-wallet signature scheme (ed25519 / secp256k1 / dilithium2) |
 | `TESSERACOIN_KEEP_BLOCKS` | light-node body pruning depth (0 = full archival) |
@@ -219,6 +234,117 @@ per-node deployments. Key knobs:
   like any signing key material (Secrets, restricted file perms, backups).
 - Run the discovery Redis on a private network; never expose `6379`.
 - Run nodes as a non-root user.
+
+### 8.1 DoS hardening — layered defence
+
+The node is hardened against flooding at three independent layers:
+
+**Layer 1 — Reverse proxy / ingress (outside the node)**
+
+nginx, Caddy, or a cloud load-balancer sits in front and handles:
+- TLS termination (nodes' self-signed certs are invisible to clients)
+- Coarse per-IP connection rate limits (`limit_req_zone` in nginx) before
+  requests reach the process
+- IP allowlisting for admin endpoints (`/tx/local`, `/debug-*`)
+- DoS surface reduction — only the intended paths are forwarded; the node
+  port is firewalled from the public internet
+
+This layer is skipped in the **direct / pod-sidecar** model (§1.1), in which
+case layer 2 becomes the first gate.
+
+**Layer 2 — Node token-bucket rate limiter (built in, `rate_limit.py`)**
+
+A per-IP token-bucket runs as ASGI middleware on the node. Design goals:
+
+- **Consensus-safe** — loopback and a configurable CIDR allowlist (peer
+  subnet + discovery) are unconditionally exempt. Peer gossip (`POST /block`,
+  `POST /tx`, `GET /headers`, `GET /chain/from`) and sync endpoints are
+  never included in the rate-limit path — throttling a peer would stall
+  consensus.
+- **Two buckets per IP** — a generous general bucket (normal polling is well
+  below it) and a tight *expensive* bucket for the compute-heavy read
+  endpoints (`/economics`, `/address/*/transactions`, `/chain`, `/supply`).
+  Peers do not call the expensive endpoints during sync.
+- **Temporary ban** — a caller that repeatedly triggers the tight bucket is
+  banned for a configurable period (`ban_duration`, default 300 s). The ban
+  is in-memory; a restart clears it.
+- **Memory-safe under spoofed-source floods** — idle client entries are
+  reaped periodically; the table cannot grow unbounded.
+
+Configure via the `rate_limit` section of `node_config.json`:
+
+```json
+"rate_limit": {
+  "requests_per_second": 20,
+  "burst": 40,
+  "expensive_requests_per_second": 2,
+  "expensive_burst": 5,
+  "ban_duration": 300,
+  "exempt_cidrs": ["10.0.0.0/8", "172.16.0.0/12"]
+}
+```
+
+`exempt_cidrs` should include the peer-to-peer subnet and the discovery
+service so consensus traffic is never throttled.
+
+**Layer 3 — Peer misbehaviour scoring (`peer_scoring.py`)**
+
+Separate from the rate limiter, the peer scorer penalises gossip peers that
+send invalid blocks or transactions (not rate-limited peers — this is the
+consensus layer). Repeat offenders are banned for `ban_duration` seconds and
+skipped in gossip broadcasts.
+
+**Load test harness**
+
+A JMeter harness in `tests/load/` can replay realistic workloads against a
+running node. The signing sidecar generates authentic request payloads —
+important because a load-generator IP cannot both flood the node and measure
+real throughput (it ends up in its own ban bucket). Use a separate measurement
+probe IP.
+
+### 8.2 Running without a proxy
+
+When a proxy is not in the picture (direct-bind model or pod-sidecar):
+
+1. Bind the node to a non-root port (`8000` or higher) and ensure the firewall
+   only allows the intended client subnets.
+2. Set `exempt_cidrs` in `rate_limit` to your peer subnet so nodes can gossip
+   freely.
+3. If TLS is required, terminate it at the service-mesh sidecar (e.g. Envoy or
+   Istio with mTLS) — the node itself does not handle TLS natively.
+4. Without a proxy, the expensive-endpoint bucket is the primary DoS gate for
+   public read traffic; tune `expensive_requests_per_second` conservatively.
+
+### 8.3 Running without the discovery service
+
+Discovery is *peer introductions only* — it has no role in consensus. To
+retire it:
+
+**Option A — Static peers (`PEERS` env var)**
+
+```bash
+PEERS=http://node2:8000,http://node3:8000,http://node4:8000
+```
+
+Set on each node. Suitable for small fixed-topology networks and air-gapped
+deployments. Every peer needs to list every other peer (or at least enough to
+be connected); the gossip fan-out handles the rest once connected.
+
+**Option B — k8s headless Service DNS**
+
+Create a headless `Service` (`clusterIP: None`) for the `StatefulSet`.
+k8s assigns stable DNS names (`node-0.tesseracoin.default.svc.cluster.local`,
+`node-1.tesseracoin…`, …). Set `PEERS` to the stable hostnames:
+
+```yaml
+env:
+  - name: PEERS
+    value: "http://node-0.tesseracoin:8000,http://node-1.tesseracoin:8000"
+```
+
+No discovery `Deployment` or Redis is needed. This is the recommended k8s
+path at scale — discovery becomes an unnecessary single-point dependency once
+the pod topology is stable.
 
 ---
 

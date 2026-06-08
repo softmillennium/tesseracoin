@@ -88,7 +88,7 @@ At minimum, set:
 PUBLIC_HOSTNAME=club.example.com   # the domain or IP browsers reach
 NGINX_HTTPS_PORT=443               # 8443 keeps sim defaults
 SIM_MODE=0                         # 0 in production, 1 for local dev
-GENESIS_ID=1                       # 1 = POWP, 5 = POWP-SmallNet (relaxed)
+GENESIS_ID=1                       # 1=PurePoW (recommended genesis), 2=POWP-Stake, 3=SmallNet; see §6 + CONSENSUS_UPGRADES.md for all eras
 ```
 
 For a strictly-private (LAN-only) cluster, leaving `PUBLIC_HOSTNAME`
@@ -236,12 +236,15 @@ genesis ceremony) is what authorises this.
 
 The current authority-class set:
 
-| ID | Authority | What it brings |
+| ID | Class | What it brings |
 |---|---|---|
-| 1 | POWP-Stake | PoW + locked slashable stake + stake-weighted random reward |
-| 5 | POWP-SmallNet | Same, with relaxed storage gate for small clusters |
-| 6 | POWP-Recall | Adds Proof-of-Access (recall) mining requirement |
-| (more registered via `@register_consensus`) | | |
+| 1 | `PurePoWAuthority` | Pure PoW genesis — SHA-256, 100% coinbase to miner, no stake. Recommended starting era for new networks. |
+| 2 | `POWPStakeAuthority` | PoW + locked/slashable stake + stake-weighted random reward + demand-responsive base fee with burn. Standard production era. |
+| 3 | `POWPStakeSmallNetAuthority` | Same as id=2 with relaxed params (min\_stake=1 TESC, unbonding=50 blocks). Dev/testing only — never production. |
+| 4 | `PoAAuthority` | Owner-signed blocks, PoW disabled. Activation-only, not genesis-able. For governance milestones or consortium use. |
+| 5 | `POWPStakeBlockRecallSmallNetAuthority` | id=3 + Proof-of-Access block recall (depth 30). Dev/testing only. |
+| 6 | `POWPStakeBlockRecallAuthority` | id=2 + Proof-of-Access block recall (depth 100). Production recall era — miners must prove they hold historical block bodies. |
+| 7 | `POWBlockRecallSmallNetAuthority` | SmallNet PoW + recall, no stake. For testing recall mechanics in isolation from staking. |
 
 The activation tooling itself (signing + submitting an activation tx
 with M-of-N owner signatures) is part of v0.2 — the v0.1 path is to
@@ -263,7 +266,7 @@ cluster to the public internet:
 | `DEBUG_MODE` | `true` (debugpy on 568x) | `false` (ports not exposed) |
 | `DEBUG_SECRET` | `sim-secret` | unset OR a real secret OR remove the port |
 | `MINER_CPU_LIMIT` | `0.3` (dev power saver) | blank (uncapped) |
-| `GENESIS_ID` | `5` (SmallNet, relaxed) | `1` (POWP, production storage gate) |
+| `GENESIS_ID` | `3` (SmallNet, relaxed) | `1` (PurePoW genesis), then activate `2` via on-chain tx when staking is ready |
 | nginx SSL certs | Self-signed `nginx/ssl/selfsigned.*` (auto-generated) | Let's Encrypt / real CA |
 | `TESSERACOIN_CORS_ORIGINS` | `*` (any origin reads the API) | explicit allow-list |
 

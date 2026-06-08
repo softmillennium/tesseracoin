@@ -154,7 +154,7 @@ Fix one of:
 ### "POST /tx/local — 403 wrong secret"
 
 The dashboard's send-tx panel requires `X-Debug-Secret` to match
-`TESSERACOIN_DEBUG_SECRET`. The sim default is `sim-secret`.
+`TESSERACOIN_DEBUG_SECRET`. The devnet-sim default is `devnet-sim-secret`.
 
 Fix: type the secret into the Debug-secret field in the wallet
 panel (it persists in sessionStorage for this browser tab).
