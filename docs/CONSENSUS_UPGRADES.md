@@ -61,7 +61,7 @@ class MyShinyAuthority(POWPAuthority):
     BRINGS = [
         "Replaces POWP's static reward with a stochastic reward draw",
         "Consumes params.extra['rng_seed_source']",
-        "Inherits PoW, pledge, mempool from base POWP",
+        "Inherits PoW, stake, mempool from base POWP",
     ]
 ```
 
@@ -81,15 +81,58 @@ assertion. Not in place today.
 
 | consensus_id | Class | What it does |
 |--------------|-------|--------------|
-| 1 | `POWPAuthority` (POWP) | Base Proof-of-Work + Pledge. Canonical owner of the shared `ConsensusState` (supply, difficulty target, etc.). |
-| 2 | `PoAAuthority` (PoA) | Replaces PoW with owner-signed blocks. Requires `params.extra["owner_pubkey"]`. Disables PoW difficulty retargeting. |
-| 3 | `POWPv2Authority` | Same code as POWP — kept registered so eras that activated under cid=3 remain validatable. Differences vs cid=1 live in the era's params. |
-| 4 | `POWPv3Authority` ⚠️ **GATED — not activatable** | POWP with **time-evolving** fee + pledge dynamics (`fee_rate` compounds per block by `1 + α × (utilisation − 0.5)`; pledge ceiling by `1 + β × (initial − active)/initial`). **Refused by the activation validator** (`ACTIVATABLE = False`): its dynamic values read `node._recent_window` (the validator's tip) instead of the block's ancestry, so honest validators on different forks disagree on the same block's validity — a consensus split. The class stays registered + unit-tested; re-enable only after the value derives from the block's ancestry or is committed in the header (EIP-1559 style). See `tests/test_powp_v3_determinism.py`. |
-| 5 | `POWPSmallNetAuthority` | Same code as POWP — relaxed gates live in the era's params (low `min_miners`, eager prune thresholds, tighter `difficulty_adjust_interval`). Used by the development sim. Genesis-able via `CONSENSUS_GENESIS_ID=5`. |
-| 6 | `POWPRecallAuthority` | POWP + Proof-of-Access recall: miners must prove they hold older block bodies. Consumes `params.recall_enabled`, `params.recall_min_depth`. |
-| 7 | `POWPRecallSmallNetAuthority` | Recall (as cid=6) plus the small-net params tuning (as cid=5). Genesis-able for chaos / sim runs that need both. |
+| 1 | `PurePoWAuthority` | Pure Proof-of-Work — Phase 1 genesis era. No stake, no random reward. Miners earn 100% of the block reward. Stake-layer transactions rejected. |
+| 2 | `POWPStakeAuthority` (POWP-Stake) | PoW + locked/slashable stake + deterministic stake-weighted random reward. Production era. Genesis-able via `CONSENSUS_GENESIS_ID=2`. |
+| 3 | `POWPStakeSmallNetAuthority` | Same as id=2 with relaxed params (low `min_miners`, eager prune thresholds, tighter `difficulty_adjust_interval`). Used by the development sim. Genesis-able via `CONSENSUS_GENESIS_ID=3`. |
+| 4 | `PoAAuthority` *(activation-only)* | Replaces PoW with owner-signed blocks. Requires `params.extra["owner_pubkey"]`. Disables PoW difficulty retargeting. Not genesis-able — activated from an existing chain only. |
+| 5 | `POWPStakeBlockRecallSmallNetAuthority` | POWP-Stake SmallNet + Proof-of-Access block recall. At each block the protocol challenges the miner to reproduce a hash of a specific past block body, chosen deterministically from tip height (depth floor: `recall_min_depth`). A node that has discarded old block bodies cannot pass the challenge — making every miner an archive node. Toggle: `recall_enabled`. Genesis-able via `CONSENSUS_GENESIS_ID=5`. |
+| 6 | `POWPStakeBlockRecallAuthority` | Production POWP-Stake + Proof-of-Access block recall. Same recall mechanism as id=5 but with production parameters (`recall_min_depth=100`, full `min_stake`, standard unbonding window). The intended activation target for switching storage-proof enforcement on a live production chain. Also genesis-able via `CONSENSUS_GENESIS_ID=6`. |
+| 7 | `POWBlockRecallSmallNetAuthority` | Pure PoW SmallNet + Proof-of-Access block recall. No stake, no random reward — block recall is the sole storage accountability mechanism. Useful for testing recall mechanics in isolation from stake. Inherits relaxed SmallNet params; `recall_min_depth=30`. Genesis-able via `CONSENSUS_GENESIS_ID=7`. |
 
 Plus any authority shipped in an operator-supplied plugin module.
+
+---
+
+## Choosing the right era
+
+### Production vs SmallNet
+
+The seven authorities split into two families:
+
+**Production eras** — designed for permanent deployment and adversarial conditions:
+
+| id | Authority | When to use |
+|----|-----------|-------------|
+| 1 | `PurePoWAuthority` | Default genesis era. Start any network here — minimal attack surface, any CPU mines from block 1. Activate era 2 when the community is ready to stake. |
+| 2 | `POWPStakeAuthority` | The standard production era. Adds slashable stake, stake-weighted random reward, and a demand-responsive base fee. Activate once a meaningful fraction of the community is prepared to stake. |
+| 4 | `PoAAuthority` | Mature-network governance milestone or consortium deployment requiring deterministic block timing. Activation-only — not genesis-able. |
+| 6 | `POWPStakeBlockRecallAuthority` | Adds Proof-of-Access storage accountability to era 2. Activate once the chain is at least `recall_min_depth=100` blocks deep and storage honesty must be protocol-enforced. |
+
+**SmallNet variants** — identical consensus logic, relaxed parameters for development and testing:
+
+| id | Authority | Use for |
+|----|-----------|---------|
+| 3 | `POWPStakeSmallNetAuthority` | Local dev, Docker sim, CI. Low `min_stake`, short `unbonding_window`, rapid difficulty retarget. |
+| 5 | `POWPStakeBlockRecallSmallNetAuthority` | Testing recall + stake mechanics together (`recall_min_depth=30`). Mirrors era 6 at low block heights. |
+| 7 | `POWBlockRecallSmallNetAuthority` | Testing recall in isolation from stake. Pure PoW + recall, no staking overhead. Useful for diagnosing recall-specific issues. |
+
+**Never deploy SmallNet parameters in production.** `min_stake=1 TESC`, `unbonding_window=50`, and `min_miners=2` are deliberately weak — an adversary with a single TESC can participate in all stake-dependent mechanisms from block 1.
+
+### Network maturation path
+
+Most networks follow this sequence:
+
+```
+era 1 (PurePoW)  →  era 2 (POWP-Stake)  →  era 4 (PoA)
+                                          →  era 6 (block recall)
+```
+
+1. **Genesis on era 1** — any CPU can mine, staking infrastructure is not yet required.
+2. **Activate era 2** — staking, slashing, and random rewards engage. Announcement + code deploy required on all nodes before the activation tx is signed.
+3. **Optionally activate era 4** — when block predictability matters more than decentralised production (consortium ledger, governance milestone). Activation-only.
+4. **Optionally activate era 6** — when the chain is deep enough for recall targets and storage accountability must be enforced by the protocol.
+
+Each activation is a single `consensus_activation` transaction co-signed by the founding multisig at a scheduled block height — no coordinated software upgrade, no community schism, no hard fork. Activations are one-way; plan the target era and activation height with sufficient lead time.
 
 ---
 
@@ -529,11 +572,7 @@ chain — operators should investigate.
 
 ## Peer misbehaviour scoring + banning
 
-Each node independently scores peers that send invalid blocks/txs/
-pledges and temporarily bans repeat offenders. Complement to on-chain
-slashing: slashing punishes byzantine MINERS (valid-but-equivocating
-blocks); peer scoring catches the simpler attack of flooding peers
-with garbage that fails verification.
+Each node independently scores peers that send invalid blocks or txs and temporarily bans repeat offenders. Complement to on-chain slashing: slashing punishes byzantine MINERS (valid-but-equivocating blocks); peer scoring catches the simpler attack of flooding peers with garbage that fails verification.
 
 **Defaults** (configurable per-node via constructor, currently not
 exposed in `node_config.json`):
@@ -542,7 +581,6 @@ exposed in `node_config.json`):
 |---|---|
 | invalid_block | 20 |
 | invalid_tx | 1 |
-| invalid_pledge | 1 |
 
 Ban threshold: 100 points (≈ 5 invalid blocks before ban).
 Ban duration: 300 seconds (5 minutes).
@@ -564,7 +602,7 @@ suggests a targeted attack against that node.
 
 **Banned peer behaviour**:
 
-- Inbound: `/block`, `/tx`, `/pledge` POSTs from a banned peer's
+- Inbound: `/block`, `/tx` POSTs from a banned peer's
   X-Origin return HTTP 403.
 - Outbound: `Network.broadcast_*` skips banned peers as targets.
 - Recovery: after `ban_duration` seconds the peer is automatically
@@ -606,7 +644,7 @@ hinges on it.
 You're in the same quadrant as Bitcoin (installed out-of-band,
 activation-by-block-height) and that quadrant is the operationally mature
 one — claiming to "beat Bitcoin at BIP9" isn't the right framing. The real
-differentiators live elsewhere (PoCRR rewards, pledge, post-quantum sigs,
+differentiators live elsewhere (POWP-Stake consensus, random rewards, post-quantum sigs,
 sound-money supply). But the activation plumbing **does** have concrete
 improvements worth knowing:
 
@@ -615,7 +653,7 @@ improvements worth knowing:
 | "Is the binary I run the canonical code?" | Trust the signed release; informal review. No on-chain claim. | Activation tx carries `code_hash` of the authority module. Validators reject if their local class hash differs. `/authority-attestations` exposes per-authority hashes for cluster-wide parity checks. | **Cryptographic, on-chain. A tampered binary fails at the network level, not in post-mortem.** |
 | "What rules govern this block?" | Read the C++ client + the BIP list. No queryable answer. | `/consensus/eras` returns the full activation history with params and authority class metadata. `consensus_at(h)` is the canonical answer per height. | **Chain is self-describing.** |
 | Parameter tuning (block size, fee rate, retarget interval, mempool TTL, …) | Compile-time constants. Any change = soft/hard fork + software release. | Per-era `ConsensusParams` data. Tunable via a `consensus_activation` tx — no new code, no software upgrade. | **Same model as Cosmos module params: data, not code.** |
-| What's actually being activated | One rule at a time (segwit, taproot, …) via soft fork. Soft-fork-only because hard forks are politically toxic. | A complete authority bundle (validator + pledge + reward + mempool sub-policies) swapped atomically. | **Honest about the unit of change. Permits a model switch (POWP → PoA for sim, POWPv3 for dynamic fees) — Bitcoin can't.** |
+| What's actually being activated | One rule at a time (segwit, taproot, …) via soft fork. Soft-fork-only because hard forks are politically toxic. | A complete authority bundle (validator + stake + reward + mempool sub-policies) swapped atomically. | **Honest about the unit of change. Permits a model switch (POWP-Stake → PoA for consortium, or adding block recall) — Bitcoin can't.** |
 | Operator warning | Informal (mailing lists, Twitter, "when miners start signalling") | Step 0: signed off-chain announcement ahead of the on-chain tx, with `code_hash` and target height. Operators have time to install + verify. | **Formal, signed, machine-readable.** |
 | Cluster trust verification | Each operator audits independently. | `/peers/consensus-ids` + `/authority-attestations` let one operator confirm every node has matching hashes for every registered authority. | **Detects "one node is running a tampered authority" actively, not after divergence.** |
 
@@ -655,10 +693,6 @@ talking publicly so readers understand the model:
 These are NOT in place today; operators should plan around them or wait
 for future milestones:
 
-- **Pledge-weighted activation governance.** M-of-N multi-sig works,
-  but voting weight is flat per pubkey. A future milestone could
-  weight signatures by recent pledge contribution so larger pledgers
-  have proportionally more say.
 - ~~**Peer-advertised supported_consensus_ids in discovery.**~~ ✅ Shipped.
   `GET /peers/consensus-ids` on any node returns the cluster-wide map
   sourced from discovery + flags any peer missing a pending activation's
@@ -713,9 +747,6 @@ for future milestones:
     end-to-end: 3 owner wallets with threshold 2, A and B sign
     offline, C wraps and submits, cluster-wide adoption verified.
     Reference for the production multi-sig flow.
-  - `tests/chaos/test_pledge_renewal.py` — pledge-renewal decay
-    under a miner outage. Cluster keeps mining when a miner goes
-    dark for renewal_window+ blocks.
   - `tests/chaos/test_slashing_no_false_positives.py` — natural PoW
     fork racing (different-parent siblings, different-miner siblings)
     does NOT trigger equivocation slashing. Negative-test guard.

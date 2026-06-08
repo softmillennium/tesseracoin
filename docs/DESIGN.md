@@ -1,381 +1,213 @@
-# Tesseracoin Protocol Design
+# Protocol Design
 
-Prepared by SoftMillennium — April 2025
+## Overview
 
-> **Feedback & corrections welcome.** Spotted an error or want to weigh in on the
-> design? Open an [issue](https://github.com/softmillennium/tesseracoin/issues) or
-> [discussion](https://github.com/softmillennium/tesseracoin/discussions), or send
-> a PR. Tesseracoin is community-first — this design is meant to be argued with.
+Tesseracoin implements **POWP-Stake** (Proof-of-Work + locked, slashable Stake), a hybrid consensus combining:
 
----
-
-## Vision
-
-Tesseracoin implements **POWP** (Proof-of-Work + Pledge), a hybrid consensus that combines PoW's
-Sybil resistance with an economic skin-in-the-game requirement. The reward distribution layer
-is **PoCRR** (Proof of Contribution + Random Reward), which splits block rewards to incentivise
-broad participation beyond just mining.
-
-**Core thesis**: Pure PoW wastes energy at scale; pure PoS creates "rich-get-richer" dynamics.
-POWP bridges both — PoW provides Sybil resistance while pledged economic commitment becomes a
-first-class fork-choice input, reducing power concentration. PoCRR ensures even non-miners
-benefit from active participation in the network.
+- **PoW mining**: SHA-256 puzzle solving with difficulty adjustment every 2,016 blocks (era 1 and 2)
+- **Stake layer**: Miners lock real on-chain balance via `stake` and `unstake` transactions, subject to an unbonding window. Equivocation burns the offender's entire locked and unbonding stake and permanently tombstones the address.
+- **Deterministic stake-weighted random reward**: A slice of the block reward goes to a participant other than the miner, selected by `sha256(prev_hash + stake_snapshot)` over all stakers above `min_stake`, weighted by locked stake, excluding the current producer.
+- **Demand-responsive base fee**: Each block header commits a `base_fee_rate` derived from the parent header's rate and the block's fill ratio. Half of collected base fees are burned from supply; the rest goes to the miner. Tips go entirely to the miner and are the priority lever for inclusion in full blocks.
+- **Fork choice**: Multi-layer tie-breaker — height → cumulative work → active locked stake of divergent producers → tiebreak seed → hash
+- **Slashing**: Equivocation evidence in a block burns the offender's entire locked and unbonding stake and tombstones the address; the whistleblower receives 1% of the burned amount.
 
 ---
 
-## POWP: Proof-of-Work + Pledge
+## POWP-Stake: Proof-of-Work + Locked Stake
 
-### Block Production
+Pure PoW (e.g., Bitcoin) grants influence proportional to hash rate. Proof-of-Stake requires no work but grants influence proportional to capital.
 
-To produce a valid block, a miner must:
+POWP-Stake bridges both — PoW provides Sybil resistance while locked, slashable stake creates real economic accountability.
 
-1. Solve a difficulty-adjusted SHA-256 proof-of-work puzzle
-2. Submit a **signed pledge** — an economic commitment from their wallet balance, locked against
-   winning the block
+### How a block is made
 
-The PoW hash commitment includes the pledge root, so the pledge amount is bound to the work.
-A miner cannot substitute a larger pledge after finding a valid nonce.
+1. **Mine** — find a nonce such that `sha256(header_bytes)` meets the current target.
+2. **Lock stake** — maintain an active `stake` transaction on-chain; the locked amount participates in fork-choice tiebreaking.
+3. **Earn rewards** — the block reward splits: coinbase goes to the miner; a deterministic stake-weighted random reward goes to a randomly selected active staker (excluding the miner).
 
 ### Fork Choice
 
-When competing chains are of equal height, the winner is determined by a deterministic
-multi-layer tie-breaker (all comparisons are applied in order; the first difference wins):
+When two chains have the same PoW difficulty, the protocol breaks ties in this order:
 
-| Priority | Rule | Direction |
-|---|---|---|
-| 1 | Tip height | Higher wins |
-| 2 | Nonce | Lower wins (more work at same difficulty) |
-| 3 | Cumulative pledge | Higher total pledged stake wins |
-| 4 | VRF seed | Lexicographically smaller wins |
-| 5 | Block hash | Lexicographically smaller wins |
+| Priority | Rule |
+|----------|------|
+| 1 | Chain height (longer chain wins) |
+| 2 | Cumulative PoW work |
+| 3 | Active locked stake of the divergent block producers |
+| 4 | Tiebreak seed (`sha256(prev_hash + nonce)`) |
+| 5 | Block hash |
 
-This layering prevents short-range selfish mining and grinding attacks — a miner cannot
-improve their position by repeatedly trying different nonces once a valid hash is found,
-because a valid lower nonce from a competing miner wins outright.
+### Stake Mechanics
 
-### Pledge Mechanics
-
-- Pledge is a wallet-signed commitment from the miner's balance (the signature scheme is pluggable — see *Addresses and Cryptography*)
-- Maximum pledge at height `h` = 10% of the block reward at that height
-- The pledge hash (`pledge_root`) is committed into the block header
-- A `pledge_donation` transaction inside the block records the pledge amount on-chain
-- Pledge constraints are verified by all nodes at block validation time
+- Miners lock spendable balance with a `stake` transaction
+- `unstake` queues a withdrawal behind an unbonding window (default 1,000 blocks)
+- Locked stake participates in fork-choice tiebreaking and random reward eligibility
+- Equivocation (signing two blocks at the same height) triggers slashing: all locked and unbonding stake is burned and the address is permanently tombstoned
+- A whistleblower who submits equivocation evidence receives 1% of the burned stake as a reward
 
 ---
 
-## PoCRR: Proof of Contribution + Random Reward
+## Random Reward
 
-### Motivation
-
-Traditional consensus models concentrate rewards to those with the most hash power (PoW) or
-the most capital (PoS). Small participants are structurally dis-incentivised, leading to
-centralisation over time.
-
-PoCRR adds a random reward layer: a portion of each block reward is distributed to a
-randomly selected **active** network participant chosen via VRF — not just the miner.
-This incentivises genuine engagement from a broad participant base.
-
-### Active Window
-
-Only participants active within the last **1,000 blocks** are eligible for the random reward.
-"Active" means:
-
-- Sent or received at least one transaction, **or**
-- Submitted a pledge in any block within the window
-
-The window prevents sybil gaming by requiring recent, genuine on-chain activity.
-
-### VRF Selection
-
-The VRF seed is computed deterministically:
+Each block includes a deterministic stake-weighted random reward:
 
 ```
-vrf_seed = sha256(prev_block_hash + nonce + pledge_root)
+winner = sha256(prev_block_hash + stake_snapshot)
 ```
 
-Eligible participants are ranked by `sha256(seed + participant_pubkey)`. The participant with
-the lowest resulting hash wins. This is provably fair — no miner can predict or bias the
-selection before committing to a nonce, and any observer can independently verify the winner.
+over all stakers above `min_stake` (default 25 TESC), excluding the current block producer. Every validator recomputes the winner identically; a block paying the wrong address is rejected. When no eligible staker exists, the slice is not minted.
 
-### Reward Split
-
-The intended split per block:
+Reward split per block:
 
 | Recipient | Amount |
-|---|---|
-| Miner | Coinbase reward − pledge amount |
-| VRF-selected active participant | Pledge amount |
-| Transaction fees | Miner (full) |
-
-VRF selection and activity tracking (`is_active`) live in the POWP consensus authority (`tesseracoin/consensus_powp.py`).
-The reward split is enforced at block construction time: `_mine_block` builds the coinbase and
-`pledge_donation` transactions before PoW begins, committing the split into the merkle root.
+|-----------|--------|
+| Miner | Coinbase reward (block subsidy + base fee share + tips) |
+| Random reward recipient | Up to 10% of block reward, stake-weighted selection |
 
 ---
 
-## Economic Model
+## Base Fee
 
-### Supply Parameters
+The base fee is demand-responsive:
 
-| Parameter | Value |
-|---|---|
-| Maximum supply | 1,000,000,000 TESC |
-| Initial block reward | 250 TESC |
-| Halving interval | 2,000,000 blocks |
-| Target block time | 60 seconds |
-| Difficulty adjustment | Every 2,016 blocks |
-| Divisibility | 8 decimal places (10¹⁷ base units) |
-| Fee rate (floor) | 0.0005 TESC per kB (50 tiles/B) |
-| Max transactions per block | 100 |
-
-The 8-decimal divisibility (giving 10¹⁷ base units) ensures sufficient granularity
-for micropayments, IoT settlement, and cross-border remittance without impractical per-unit
-costs at higher valuations.
-
-### Fee and Pledge Evolution
-
-Miner economics are designed to stay viable as the block subsidy halves — the
-pledge requirement falls and fee revenue rises as the network matures. The
-**default** consensus achieves this with *static, deterministic* rules, not a
-per-block controller:
-
-- **Pledge auto-tapers with the subsidy.** Maximum pledge is 10% of the block
-  reward, and the reward halves every 2,000,000 blocks, so the pledge ceiling
-  falls in step with the subsidy automatically — no tuning required.
-- **The fee floor is a static anti-spam minimum** (50 tiles/B, scaled with the
-  reward). Actual miner fee revenue comes from the **market tips** users pay
-  above the floor, which grow with adoption and congestion — this is what
-  supplements the declining subsidy, the same mechanism Bitcoin relies on.
-
-So the "pledge-heavy → fee-heavy" transition is driven by the halving schedule
-plus a tip market, not by a dynamic floor.
-
-> **Experimental — gated, not active.** A per-block *dynamic* fee/pledge
-> controller was prototyped as the `POWPv3` consensus authority
-> (`fee_rate ×= 1 + α·(utilisation − 0.5)`, `pledge_cap ×= 1 + β·(initial −
-> miners)/initial`; modelled in `docs/fee_pledge_fluctuation_graph.py`,
-> α = 0.0001, β = 0.0002). It is **refused by the activation validator**: its
-> values derive from the validator's chain tip rather than the block's ancestry,
-> so honest nodes on different forks can disagree on a block's validity — a
-> consensus split. See `CONSENSUS_UPGRADES.md` (authority id 4, marked GATED)
-> and `tests/test_powp_v3_determinism.py`.
+- Each block header commits a `base_fee_rate` derived purely from the parent header's rate and the block's fill ratio
+- All validators agree on the rate because it derives from the block's ancestry, not from any per-node chain-tip state
+- Half of collected base fees are burned from supply
+- The other half goes to the miner
+- Tips (amounts above the base fee specified by the sender) go entirely to the miner and are the mechanism for priority inclusion in full blocks
 
 ---
 
-## Protocol Flow
+## Mining Flow
 
 ```
-1. Build block
-   ├── Select transactions from mempool (max 100, ordered by fee then type)
-   ├── Create coinbase transaction (miner → miner, amount = block_reward + fees)
-   └── Create pledge (≤ 10% of current block reward), sign it
+1. Build mempool snapshot
+   ├── Select transactions (up to MAX_BLOCK_TXS)
+   └── Include stake/unstake transactions if valid
 
-2. Mine
-   ├── Assemble BlockHeader (prev_hash, merkle_root, pledge_root, target, timestamp, …)
-   ├── Increment nonce until sha256(header) < target
-   └── Abort cleanly if chain tip changes under us (bootstrap reorg)
+2. Assemble BlockHeader
+   ├── prev_hash, merkle_root, target, timestamp
+   └── base_fee_rate (from parent)
 
-3. Finalise
-   ├── Sign the block header (miner's wallet signature)
-   ├── Verify tip hasn't moved (race guard)
-   └── Verify block locally (PoW, pledge constraints, VRF seed, merkle root, signatures)
+3. Mine PoW
+   └── Iterate nonce until sha256(header_bytes) meets target
 
-4. Gossip
-   ├── Add block to local chain
-   ├── Broadcast to all peers (X-Origin header prevents echo)
-   └── Peers: validate → add or reject
+4. Compute random reward recipient
+   └── sha256(prev_hash + stake_snapshot) → stake-weighted selection
 
-5. Fork resolution (on receiving a competing chain)
-   ├── Apply multi-layer tie-breaker
-   ├── If better: find common ancestor, orphan divergent blocks, re-add fork blocks
-   └── Return orphaned transactions to mempool
+5. Assemble and broadcast block
+   └── Verify locally before broadcasting
 ```
-
----
-
-## Addresses and Cryptography
-
-- **Signature schemes** (pluggable, `sigschemes.py`): `secp256k1` (legacy ECDSA), `ed25519`
-  (the default — compact signatures), and post-quantum `dilithium2` (FIPS 204 ML-DSA-44, via
-  liboqs). Each wallet records its scheme and the address encodes which one it uses, so all
-  three can coexist on one chain.
-- **Address format**: bech32, HRP `tesc` — e.g. `tesc1q...`, derived from `sha256(pubkey)[:20]`
-  with witness version 0
-- **Chain ID**: 670210 — included in every transaction signing payload to prevent cross-chain replay
-- **Block signature**: the miner signs `hash_for_pow(header)` (not the full header hash, so the
-  signature field itself is not part of the signed data)
 
 ---
 
 ## Transaction Types
 
-| Type | Purpose | Implemented |
-|---|---|---|
-| `currency` | Standard value transfer | Yes |
-| `coinbase` | Block reward payment to miner | Yes |
-| `pledge_donation` | On-chain record of miner's pledge | Yes |
-| `nft` | Non-fungible token | Scaffolded only |
-| `smart_contract` | Contract call | Scaffolded only |
+| Type | Purpose | Gossip-relay |
+|------|---------|-------------|
+| `transfer` | Send TESC between addresses | Yes |
+| `coinbase` | Block reward, minted by miner | No |
+| `stake` | Lock balance as validator stake | Yes |
+| `unstake` | Queue stake withdrawal (unbonding window) | Yes |
+| `slash` | Burn equivocating miner's stake | Yes |
+| `random_reward` | Protocol-minted reward to stake-weighted winner | No |
+| `consensus_activation` | Switch consensus era (multisig) | Yes |
 
 ---
 
-## Implementation Status
+## Addresses and Cryptography
 
-### Done
+All addresses are bech32m-encoded with the human-readable prefix `tesc`. The address encodes both the public key and the signature scheme:
 
-- SHA-256 proof-of-work with difficulty retargeting every 2,016 blocks (±4× cap), as in Bitcoin
-- Pledge creation, signing, verification, and fork-choice weighting
-- VRF seed committed in block header, verified at validation time
-- Active participant tracking (`is_active`, `eligible_proposers`)
-- Multi-layer deterministic fork choice
-- FastAPI HTTP gossip with X-Origin deduplication
-- Background bootstrap sync (15s poll, reorg to common ancestor)
-- SQLite persistence with WAL mode and connection pooling (32+16)
-- Orphaned-block pruning on startup
-- Per-node log files at `DATA_DIR/logs/node.log`
-- Bech32 addresses with pluggable signing — `secp256k1` / `ed25519` (default)
-- **Post-quantum signatures available** — Dilithium2 / ML-DSA-44 (FIPS 204) via `sigschemes.py`
-- **Chain-derived balance validation** — sender balance checked against confirmed on-chain history (`get_confirmed_balance`) at block validation
-- **PoCRR reward disbursement** — VRF winner selected from the previous block's `vrf_seed`; the `pledge_donation` is credited on block receipt
-- **Mempool expiry** — unconfirmed transactions evicted after `mempool_ttl_blocks` (`_evict_expired_mempool`)
-- **Equivocation slashing + pledge-renewal-window fork-choice decay** (`pledge_renewal_window_blocks`, `slashing_lookback_blocks`)
-- **Pluggable consensus authority interface** — swappable difficulty / reward / proposer / pledge / mining / validation / fork-choice policies (`consensus_api.py`, `@register_consensus`; see *Swappable Consensus* below)
+- **Ed25519** — default; fast, compact signatures
+- **secp256k1** — Bitcoin-compatible; supported for ecosystem tooling
+- **Dilithium2 / FIPS 204 ML-DSA-44** — post-quantum; production-ready at genesis
 
-### Not Yet Implemented
+All three schemes coexist on one chain. The address encodes which scheme was used, so validators always know which verification function to apply.
 
-- **NFT / smart-contract execution** — the `nft` and `smart_contract` transaction types are accepted and stored, but there is no execution logic (scaffolded only)
-- **Formal UTXO / account chainstate layer** — balances are derived from confirmed on-chain history at validation time (above), but there is no separate account-model layer; tightening PoCRR recipient enforcement inside `verify_block` waits on it
+Transaction signing is pluggable via `tesseracoin/sigschemes.py`. A `chain_id` (670210) is bound into every signing payload, preventing cross-chain replay.
 
 ---
 
-## Swappable Consensus (implemented)
+## Swappable Consensus Architecture
 
-Tesseracoin's consensus rules — difficulty, reward, proposer selection, pledge, mining, block validation, and fork choice — live behind a plugin layer (`tesseracoin/consensus_api.py`). The default `POWPAuthority` (consensus_id=1) implements the base POWP rules natively; legacy POWP blocks (`consensus_id == 1`, empty `consensus_proof`) hash byte-for-byte as before, so existing chains stay compatible. Other authorities are registered alongside it — `PoAAuthority` (id=2, owner-signed blocks), `POWP-SmallNet` (id=5), `POWP-Recall` (id=6), and the activation-gated `POWPv3` (id=4).
-
-### Architecture
+Tesseracoin's consensus rules live behind a plugin layer (`tesseracoin/consensus_api.py`):
 
 ```
 ConsensusAuthority
-├── ConsensusParams           # frozen dataclass: max_supply, target time, …
-├── DifficultyPolicy          # next_target(node, params)
-├── RewardSchedule            # block_reward(height, params), fee_for(tx, params)
-├── ProposerSelectionPolicy   # vrf_seed / eligible_proposers
-├── PledgePolicy              # validate_pledge / active_set
-├── MiningPolicy              # produce_proof / verify_proof
-├── BlockValidator            # verify_block(block, node, params)
-└── ForkChoicePolicy          # compare_tips(a, b, ctx)
+├── DifficultyPolicy       # next_target / difficulty_adjust_interval
+├── RewardSchedule         # coinbase / random_reward / base_fee_rate
+├── ProposerPolicy         # validate_proposer / active_set
+├── StakePolicy            # validate_stake / validate_unstake / slashing
+├── MiningPolicy           # hash_for_pow / verify_pow
+├── BlockValidator         # verify_block (full validation pipeline)
+└── ForkChoicePolicy       # compare_chains
 ```
 
-Authorities self-register at import time via `@register_consensus`. The Node loads plugin modules listed in `config.consensus.plugins` (dotted paths) at startup; this triggers the decorator and populates `AUTHORITY_CLASSES`.
+Each authority bundle is registered with `@register_consensus(id=N)` and activated via an on-chain `consensus_activation` transaction co-signed by the founding multisig. Swapping consensus requires no hard fork and no coordinated software upgrade.
 
-### Era-tagged history
+### Registered eras
 
-The `consensus_eras` table records every activation as `(activation_height, consensus_id, params_json, activation_txid, activated_by)`. `Node.consensus_at(h)` resolves the active authority via `bisect_right` over the era list in O(log n). Genesis inserts a row `(0, 1, default_params, NULL, 'genesis')` on first startup.
-
-`BlockHeader` gained `consensus_id: int = 1` and `consensus_proof: bytes = b""` (and, later, the Proof-of-Access recall fields). For legacy POWP blocks (`consensus_id == 1 and consensus_proof == b""`) the hashing path serializes the legacy JSON dict verbatim, preserving byte-equality with existing chains. Non-default headers bind `consensus_id` into the PoW preimage; the `consensus_proof` itself is *excluded* from `hash_for_pow` — it is the search artifact (like the nonce), so including it would be circular.
-
-### Owner-signed activation transactions
-
-A new transaction type `consensus_activation` carries `{consensus_id, activation_height, params_json, owner_sig | owner_sigs, nonce}` in `tx.data`. `POWPBlockValidator` enforces:
-
-1. The owner signature(s) verify under the configured owner key(s) — single-sig (`owner_sig`) or an M-of-N threshold (`owner_sigs` + `owner_threshold`).
-2. `consensus_id` is registered in `AUTHORITY_CLASSES`.
-3. `activation_height > block.height + 100` (SAFETY_WINDOW).
-4. No other era row already has `activation_height > current_height` (no concurrent pending activation).
-5. `params_json` parses into `ConsensusParams`.
-6. `(owner_pubkey, nonce)` has not been used before — replay protection via `consensus_activation_nonces` table.
-
-When a block containing such a tx commits, `Node._register_eras_from_block` inserts the era row and records the nonce. From `activation_height` onward, `consensus_at()` returns the new authority.
-
-### Cross-era fork choice
-
-The authority of the *higher* tip governs comparison. If two competing tips live in different eras, the later-era tip wins regardless of any per-authority tie-breakers. This is enforced as a short-circuit at the top of `Node._is_better_chain` before delegating to `authority.fork_choice.compare_tips`. The rule prevents an old-era fork from reorganizing across an activation height — once an era activates, the chain is committed.
-
-### Activation flow
-
-```
-1. Owner constructs consensus_activation tx with N blocks of safety window.
-2. Tx propagates to mempool.
-3. Some miner includes it in a block; POWPBlockValidator runs all 6 rules.
-4. Block commits → Node._register_eras_from_block writes consensus_eras row.
-5. From activation_height onward, consensus_at() returns the new authority.
-6. /status endpoint reports current consensus_id.
-```
-
-### Risks
-
-- **Activation with no compatible miners** — chain halts at activation_height. Mitigation: SAFETY_WINDOW + the owner-signed `consensus_revert` tx (implemented; `scripts/sign_revert.py`).
-- **Tx semantics across boundaries** — txs valid under POWP may behave differently under a new authority. Mitigation: keep txs consensus-agnostic except for `consensus_activation` itself; or include `consensus_id` in the tx sighash (future work).
-- **Light clients** — out of scope; any future light-client format must include the era table.
-- **Difficulty cadence change across an era boundary** — if a new era changes `target_block_time` or `difficulty_adjust_interval` (e.g. from 60s to 30s), the FIRST difficulty adjustment after the boundary computes `expected = new_target_block_time × adjust_interval` while `actual` spans blocks mined under the OLD target. This produces a one-shot step in difficulty bounded by the existing 0.25..4× cap. A 2× change in `target_block_time` will produce a roughly 2× step. Subsequent adjustments converge normally. Activation operators should expect a single transient difficulty jolt at the boundary; this is a known and bounded behavior rather than a bug. Mitigation if undesired: set `extra["skip_first_adjust"]=true` in the activating params and the authority skips the first post-boundary window — **implemented** (M3.1).
+| id | Authority | Purpose |
+|----|-----------|--------|
+| 1 | `PurePoWAuthority` | SHA-256 PoW only; full coinbase to miner; no stake layer. Phase 1 genesis era. |
+| 2 | `POWPStakeAuthority` | PoW + locked slashable stake + stake-weighted random reward + demand-responsive base fee. Production era. |
+| 3 | `POWPStakeSmallNetAuthority` | Era 2 rules with relaxed params for sim/chaos testing. |
+| 4 | `PoAAuthority` | Owner-signed blocks; no PoW. Activation-only (not genesis-able). |
+| 5 | `POWPStakeBlockRecallSmallNetAuthority` | Era 3 + Proof-of-Access block recall. |
+| 6 | `POWPStakeBlockRecallAuthority` | Era 2 + Proof-of-Access block recall. Production activation target. |
+| 7 | `POWBlockRecallSmallNetAuthority` | Pure PoW SmallNet + block recall; no stake. |
 
 ---
 
-## Open Design Questions
+## Proof-of-Access Block Recall (Eras 5, 6, 7)
 
-1. **Pledge-weighted mining odds** — ~~should a larger pledge give slightly lower effective difficulty?~~ **Resolved: No.** Pledge affects fork-choice tiebreaker only; PoW odds remain purely compute-based. Coupling pledge to mining odds would reintroduce capital-favours-capital dynamics that POWP is designed to avoid.
+When block recall is active, each miner must prove it holds the body of a specific past block:
 
-2. **Opt-out for random reward** — some participants may not want to receive rewards
-   (regulatory, privacy). Should eligibility be opt-in rather than automatic?
+```
+recall_height = f(prev_block_hash, nonce, tip_height, activation_height, recall_min_depth)
+```
 
-3. **Protocol treasury** — ~~a small percentage of each block reward to a governed fund for dev, node ops, and protocol upgrades.~~ **Resolved: No treasury.** All block rewards go to miners and VRF-selected participants. Can be revisited once the core protocol is stable.
+The miner embeds a `recall_tx_id` into the PoW hash preimage. The winning nonce commits both a valid proof-of-work and a valid recall answer. On winning, a merkle proof of the answer's position in the recalled block is attached.
 
-4. **Pledge update policy** — can a miner change their pledge commitment after broadcasting it
-   to peers but before the block is confirmed? Current design: no (pledge is committed into the
-   block being mined).
-
-5. **Initial distribution** — how the genesis supply is introduced into circulation is an
-   open question and is **not yet designed**. No token is being offered, sold, or distributed,
-   and none is available for purchase. Any future distribution scheme would be specified here,
-   would be a utility allocation within a community rather than an investment offering, and
-   would be subject to applicable law in the relevant jurisdictions.
-
-6. **Dynamic pledge and fee adjustment** — the `fee_pledge_fluctuation_graph.py` simulation uses fixed sensitivity parameters (α = 0.0001, β = 0.0002). **Resolved: not adopted as the default.** It was prototyped as the `POWPv3` authority, but its per-block values derive from the validator's chain tip rather than the block's ancestry, which can split consensus — so `POWPv3` is **gated against activation**. The default keeps static, deterministic rules (see *Fee and Pledge Evolution*). A corrected version would commit the rate in the header (EIP-1559 style) or derive it from the block's ancestry.
-
+A node that has discarded old block bodies cannot produce a valid block for that nonce. Its effective hash rate is proportional to the fraction of the eligible range it stores, creating a direct economic incentive to archive.
 
 ---
 
-## Protocol Notes
+## Peer Discovery and Storage
 
-### Sync scope
+### Peer sources
 
-By default every node is full-archival — it stores and serves the entire chain in SQLite, and
-`node_type` controls only whether a node produces blocks, not whether it serves history.
+| Source | When used |
+|--------|----------|
+| `PEERS` env var | Static seeds; always loaded at startup |
+| `DATA_DIR/peers.json` | Persisted confirmed peer URLs; loaded at `Network.__init__` |
+| Discovery service | Optional rendezvous server; peers registered and fetched on startup |
 
-A node can also run **light**: with `keep_blocks > 0` it prunes old block bodies (keeping all
-headers) and fetches missing history on demand from archival "librarian" peers — part of the
-Proof-of-Access / shared-history storage work. Full SPV-style clients (headers + Merkle proofs
-only, no librarian fetch) remain a future optimisation.
+### On-disk peer store
 
-### Sync verification paths
+`peers.json` is a flat JSON array of confirmed peer URLs, capped at 100 entries (`_PEER_STORE_CAP`). It is written when the discovery service adds a new confirmed peer or when the gossip crawl discovers and confirms a new peer. It is loaded at `Network.__init__` time and seeds `self.peers` before any network contact is made.
 
-All three ingestion paths now verify blocks before writing them:
+### Gossip crawl
 
-```
-Gossip:      receive block → verify_block → _handle_fork → verify_chain → _switch_to_fork ✓
-Bootstrap:   _bootstrap_sync_once → _paginated_sync → _attempt_chain_reorg → verify_chain → _switch_to_fork ✓
-Gap repair:  _fill_gap / _force_repair_segment → verify_block per block → add/replace ✓
-```
+A background thread (`net-gossip-crawl`) wakes after a 15-second initial delay, then every 60 seconds:
 
-### Comparison with Bitcoin sync
+1. Snapshot the current peer list.
+2. For each peer, fetch `GET /peers`.
+3. For each URL in the response that is not already known and not the local node's own URL:
+   a. Call `_try_add_peer(url, max_peers)` — handshake via `GET /info`, verify genesis params hash, then insert into `self.peers` if all succeed.
+4. If any peers were added, write `peers.json`.
 
-Bitcoin uses several robustness techniques; Tesseracoin has adopted some and not others:
+The gossip crawl is the mechanism by which a node seeded with only one known peer can discover the rest of the network without a discovery service.
 
-1. **Headers-first** — download headers and verify PoW before fetching bodies. *Partially
-   adopted*: a `/headers/from` endpoint and headers-first light-node sync exist; verifying the
-   full header chain before any body is fetched is not yet the default path for archival sync.
-2. **Cumulative work** — canonical chain = most total accumulated PoW, not greatest height.
-   *Not adopted*: Tesseracoin uses height as the primary tie-breaker, which is approximately
-   correct but not cryptographically sound (two chains at the same height can have very
-   different total work).
-3. **Parallel block download** — fetch ranges from multiple peers simultaneously. *Not adopted.*
-4. **Checkpoints** — hardcoded `(height, hash)` pairs that prevent reorgs past them. *Not adopted.*
-5. **Peer scoring / banning** — misbehaviour accrues a score; crossing the threshold bans the
-   peer for a cooldown. *Adopted* (`peer_scoring.py`, `PeerScoreTracker`).
+---
 
-### Cumulative work + cumulative pledge as fork choice
+## Open Questions
 
-Replacing height-first fork choice with cumulative work + cumulative pledge (Step 5 on the
-roadmap) would close the cryptographic soundness gap identified above. A tie-breaker is still
-needed for chains with equal cumulative work and equal pledge — the current VRF seed →
-block hash ladder suffices for that residual case.
+1. **Librarian incentives** — archival nodes (those serving block bodies for recall) have no explicit reward beyond the ability to mine recall-era blocks. A direct librarian fee per body served would strengthen the archival incentive.
+
+2. **Sybil resistance in peer discovery** — the peer store and gossip crawl have no subnet diversity enforcement. An adversary controlling the discovery service can eclipse a newly joining node by populating its peer list exclusively with adversary-controlled nodes. Countermeasure: bucket peers by /16 and cap per-bucket entries.
+
+3. **Random reward distribution** — stake-weighted random reward is regressive: larger stakers receive proportionally more. Alternative: uniform random selection over all stakers above the minimum threshold, regardless of stake size.
+
+4. **Era activation governance** — the founding multisig approach is simple but centralised. Stake-weighted voting (where activation requires a threshold of locked stake weight, not just M-of-N key holders) would distribute governance more broadly.

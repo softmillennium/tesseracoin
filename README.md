@@ -13,8 +13,8 @@
 
 ## What it is
 
-Tesseracoin is a hybrid **Proof-of-Work + Pledge (POWP)** blockchain with a
-random-reward layer (**PoCRR**), designed for trusted communities — families,
+Tesseracoin is a hybrid **Proof-of-Work + locked Stake (POWP-Stake)** blockchain with a
+random-reward layer, designed for trusted communities — families,
 friends, clubs, and causes. Its guiding principle is simple:
 
 > **The network rewards the people who *use* it — not those who merely hold it.**
@@ -24,9 +24,9 @@ of control, and a public, tamper-evident record everyone can audit.
 
 ## How it works (in brief)
 
-- **Miners** do a modest amount of work *and* stake a refundable **pledge** —
-  skin in the game — to add a block. This keeps the network honest without
-  Bitcoin-scale energy use.
+- **Miners** do a modest amount of work *and* lock on-chain **stake** —
+  real economic accountability — to add a block. This keeps the network honest
+  without Bitcoin-scale energy use.
 - **Active participants** earn a share of rewards, chosen at random — so
   staying engaged, not hoarding, is what pays.
 
@@ -35,7 +35,7 @@ of control, and a public, tamper-evident record everyone can audit.
 ## What makes it different
 
 - **Rewards participation, not hoarding.** Random rewards flow to active members.
-- **Energy-light by design.** A pledge layer carries part of the security load
+- **Energy-light by design.** Locked stake carries part of the security load
   that raw hash power otherwise would.
 - **Future-proof cryptography.** Post-quantum signatures are built in *now* —
   not on a someday roadmap.
@@ -65,17 +65,17 @@ of control, and a public, tamper-evident record everyone can audit.
 
 For the curious — a few of the ideas that make Tesseracoin tick.
 
-**How a block is made, and how the reward is shared.** Work plus a pledge
-produces a block; most of the reward goes to the miner, a slice to a randomly
-chosen active participant.
+**How a block is made, and how the reward is shared.** Work plus locked on-chain
+stake produces a block; most of the reward goes to the miner, a stake-weighted
+random slice goes to an active participant.
 
 <p align="center"><img src="assets/block_flow.png" alt="Block production and reward split" width="640"></p>
 
 **Adaptive economics.** Transaction fees rise gently with demand, while the
-pledge required to mine eases as more miners join — keeping participation
-accessible as the network grows.
+difficulty adjusts automatically — keeping participation accessible as the
+network grows. Half of all collected fees are burned, reducing supply over time.
 
-<p align="center"><img src="assets/economics.png" alt="Adaptive fee and pledge curves" width="620"></p>
+<p align="center"><img src="assets/economics.png" alt="Adaptive fee curves and supply burn" width="620"></p>
 
 **Built for the post-quantum era — without the storage blowup.** Quantum-safe
 signatures are large, and naively that makes every node's storage balloon over
@@ -111,7 +111,7 @@ and contribute — without touching the technology underneath.
 
 The protocol design and operator guides are published in [`docs/`](docs/README.md):
 
-- **[Protocol design](docs/DESIGN.md)** — POWP consensus, PoCRR random rewards, fork choice, economic model, and cryptography
+- **[Protocol design](docs/DESIGN.md)** — POWP-Stake consensus, stake-weighted random rewards, fork choice, economic model, and cryptography
 - **[Operator guide](docs/OPERATOR_GUIDE.md)** · **[Deployment](docs/DEPLOYMENT.md)** · **[Consensus upgrades](docs/CONSENSUS_UPGRADES.md)** · **[Troubleshooting](docs/TROUBLESHOOTING.md)**
 - Website: **https://tesseracoin.com**
 

@@ -238,7 +238,7 @@ The current authority-class set:
 
 | ID | Authority | What it brings |
 |---|---|---|
-| 1 | POWP | PoW + pledge + reward + production storage gate |
+| 1 | POWP-Stake | PoW + locked slashable stake + stake-weighted random reward |
 | 5 | POWP-SmallNet | Same, with relaxed storage gate for small clusters |
 | 6 | POWP-Recall | Adds Proof-of-Access (recall) mining requirement |
 | (more registered via `@register_consensus`) | | |
