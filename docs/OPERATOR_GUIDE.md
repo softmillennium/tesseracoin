@@ -88,7 +88,7 @@ At minimum, set:
 PUBLIC_HOSTNAME=club.example.com   # the domain or IP browsers reach
 NGINX_HTTPS_PORT=443               # 8443 keeps sim defaults
 SIM_MODE=0                         # 0 in production, 1 for local dev
-GENESIS_ID=1                       # 1=PurePoW (recommended genesis), 2=POWP-Stake, 3=SmallNet; see §6 + CONSENSUS_UPGRADES.md for all eras
+GENESIS_ID=1                       # 1=PurePoW (recommended genesis), 2=POWP-Stake, 4=PoA, 8=Pure PoS; for SmallNet/recall use CONSENSUS_GENESIS_PROFILE — see §6 + CONSENSUS_UPGRADES.md
 ```
 
 For a strictly-private (LAN-only) cluster, leaving `PUBLIC_HOSTNAME`
@@ -234,17 +234,30 @@ The chain's consensus rules can be changed via a signed activation
 transaction at a future height. The owner multisig (set up during the
 genesis ceremony) is what authorises this.
 
-The current authority-class set:
+The current authority-class set — four registered consensus families
+(the only valid `consensus_id` values):
 
 | ID | Class | What it brings |
 |---|---|---|
-| 1 | `PurePoWAuthority` | Pure PoW genesis — SHA-256, 100% coinbase to miner, no stake. Recommended starting era for new networks. |
-| 2 | `POWPStakeAuthority` | PoW + locked/slashable stake + stake-weighted random reward + demand-responsive base fee with burn. Standard production era. |
-| 3 | `POWPStakeSmallNetAuthority` | Same as id=2 with relaxed params (min\_stake=1 TESC, unbonding=50 blocks). Dev/testing only — never production. |
-| 4 | `PoAAuthority` | Owner-signed blocks, PoW disabled. Activation-only, not genesis-able. For governance milestones or consortium use. |
-| 5 | `POWPStakeBlockRecallSmallNetAuthority` | id=3 + Proof-of-Access block recall (depth 30). Dev/testing only. |
-| 6 | `POWPStakeBlockRecallAuthority` | id=2 + Proof-of-Access block recall (depth 100). Production recall era — miners must prove they hold historical block bodies. |
-| 7 | `POWBlockRecallSmallNetAuthority` | SmallNet PoW + recall, no stake. For testing recall mechanics in isolation from staking. |
+| 1 | `PurePoWAuthority` | Pure PoW genesis — SHA-256, 100% coinbase to miner, no stake. Recommended starting era for new networks. Genesis-able. |
+| 2 | `POWPStakeAuthority` | PoW + locked/slashable stake + stake-weighted random reward + demand-responsive base fee with burn. Standard production era. Genesis-able. |
+| 4 | `PoAAuthority` | Owner-signed blocks, PoW disabled. For governance milestones or consortium use. Genesis-able (or reached via activation from an existing chain). |
+| 8 | `PoSAuthority` | Pure Proof-of-Stake — deterministic stake-weighted slot leader election, no mining. Delegation pools, optional inactivity eviction, top-N active set. Genesis-able. |
+
+**SmallNet (relaxed gates/cadence) and block recall (Proof-of-Access)
+are no longer distinct eras.** They are parameter profiles layered on a
+family, launched at genesis via `CONSENSUS_GENESIS_PROFILE=<name>` (or
+`--profile`). The named profiles:
+
+| Profile | Family + params | (old era id) |
+|---|---|---|
+| `powps-smallnet` | id 2 + SmallNet params | (was id 3) |
+| `powps-recall-smallnet` | id 2 + recall + SmallNet | (was id 5) |
+| `powps-recall` | id 2 + recall (production params) | (was id 6) |
+| `pow-recall-smallnet` | id 1 + recall + SmallNet | (was id 7) |
+
+Select a production family at genesis with `CONSENSUS_GENESIS_ID`
+(1, 2, 4, or 8); select a profile with `CONSENSUS_GENESIS_PROFILE`.
 
 The activation tooling itself (signing + submitting an activation tx
 with M-of-N owner signatures) is part of v0.2 — the v0.1 path is to
@@ -266,7 +279,7 @@ cluster to the public internet:
 | `DEBUG_MODE` | `true` (debugpy on 568x) | `false` (ports not exposed) |
 | `DEBUG_SECRET` | `sim-secret` | unset OR a real secret OR remove the port |
 | `MINER_CPU_LIMIT` | `0.3` (dev power saver) | blank (uncapped) |
-| `GENESIS_ID` | `3` (SmallNet, relaxed) | `1` (PurePoW genesis), then activate `2` via on-chain tx when staking is ready |
+| Genesis era | `CONSENSUS_GENESIS_PROFILE=powps-smallnet` (relaxed) | `GENESIS_ID=1` (PurePoW genesis), then activate `2` via on-chain tx when staking is ready |
 | nginx SSL certs | Self-signed `nginx/ssl/selfsigned.*` (auto-generated) | Let's Encrypt / real CA |
 | `TESSERACOIN_CORS_ORIGINS` | `*` (any origin reads the API) | explicit allow-list |
 

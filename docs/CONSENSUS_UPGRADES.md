@@ -57,7 +57,7 @@ vs the empty `ConsensusAuthority` base, as a `BRINGS` class attribute:
 @register_consensus
 class MyShinyAuthority(POWPAuthority):
     """One-paragraph human description of this authority."""
-    id = 8
+    id = 16   # a fresh id outside the four registered families (1, 2, 4, 8)
     BRINGS = [
         "Replaces POWP's static reward with a stochastic reward draw",
         "Consumes params.extra['rng_seed_source']",
@@ -79,42 +79,65 @@ assertion. Not in place today.
 
 ## Authorities available today
 
+There are four registered consensus families — the only valid
+`consensus_id` values:
+
 | consensus_id | Class | What it does |
 |--------------|-------|--------------|
-| 1 | `PurePoWAuthority` | Pure Proof-of-Work — Phase 1 genesis era. No stake, no random reward. Miners earn 100% of the block reward. Stake-layer transactions rejected. |
-| 2 | `POWPStakeAuthority` (POWP-Stake) | PoW + locked/slashable stake + deterministic stake-weighted random reward. Production era. Genesis-able via `CONSENSUS_GENESIS_ID=2`. |
-| 3 | `POWPStakeSmallNetAuthority` | Same as id=2 with relaxed params (low `min_miners`, eager prune thresholds, easier `initial_target`). Used by the development sim. Genesis-able via `CONSENSUS_GENESIS_ID=3`. |
-| 4 | `PoAAuthority` *(activation-only)* | Replaces PoW with owner-signed blocks. Requires `params.extra["owner_pubkey"]`. Disables PoW difficulty retargeting. Not genesis-able — activated from an existing chain only. |
-| 5 | `POWPStakeBlockRecallSmallNetAuthority` | POWP-Stake SmallNet + Proof-of-Access block recall. At each block the protocol challenges the miner to reproduce a hash of a specific past block body, chosen deterministically from tip height (depth floor: `recall_min_depth`). A node that has discarded old block bodies cannot pass the challenge — making every miner an archive node. Toggle: `recall_enabled`. Genesis-able via `CONSENSUS_GENESIS_ID=5`. |
-| 6 | `POWPStakeBlockRecallAuthority` | Production POWP-Stake + Proof-of-Access block recall. Same recall mechanism as id=5 but with production parameters (`recall_min_depth=100`, full `min_stake`, standard unbonding window). The intended activation target for switching storage-proof enforcement on a live production chain. Also genesis-able via `CONSENSUS_GENESIS_ID=6`. |
-| 7 | `POWBlockRecallSmallNetAuthority` | Pure PoW SmallNet + Proof-of-Access block recall. No stake, no random reward — block recall is the sole storage accountability mechanism. Useful for testing recall mechanics in isolation from stake. Inherits relaxed SmallNet params; `recall_min_depth=30`. Genesis-able via `CONSENSUS_GENESIS_ID=7`. |
+| 1 | `PurePoWAuthority` | Pure Proof-of-Work — Phase 1 genesis era. No stake, no random reward. Miners earn 100% of the block reward. Stake-layer transactions rejected. Genesis-able via `CONSENSUS_GENESIS_ID=1`. |
+| 2 | `POWPStakeAuthority` (POWP-Stake) | PoW + locked/slashable stake + deterministic stake-weighted random reward + demand-responsive base fee. Production era. Genesis-able via `CONSENSUS_GENESIS_ID=2`. |
+| 4 | `PoAAuthority` | Replaces PoW with owner-signed blocks. Requires `params.extra["owner_pubkey"]`. Disables PoW difficulty retargeting. For governance milestones / consortium deployment. Genesis-able via `CONSENSUS_GENESIS_ID=4`, or reached via activation from an existing chain. |
+| 8 | `PoSAuthority` | Pure Proof-of-Stake (slot-based) — deterministic stake-weighted slot leader election, no mining. Delegation pools, optional inactivity eviction, top-N active set. Genesis-able via `CONSENSUS_GENESIS_ID=8`. |
 
 Plus any authority shipped in an operator-supplied plugin module.
+
+### Parameter profiles — SmallNet and block recall
+
+SmallNet (relaxed gates and fast cadence) and block recall
+(Proof-of-Access storage accountability) are **not** distinct eras.
+They are parameter profiles layered on a family, selected at genesis
+via the env `CONSENSUS_GENESIS_PROFILE=<name>` (or `--profile`):
+
+| Profile | Family + params | (old era id) |
+|---|---|---|
+| `powps-smallnet` | id 2 + SmallNet params | (was id 3) |
+| `powps-recall-smallnet` | id 2 + recall + SmallNet | (was id 5) |
+| `powps-recall` | id 2 + recall (production params) | (was id 6) |
+| `pow-recall-smallnet` | id 1 + recall + SmallNet | (was id 7) |
+
+Block recall: at each block the protocol challenges the producer to
+reproduce a hash of a specific past block body, chosen deterministically
+from tip height (depth floor: `recall_min_depth`). A node that has
+discarded old block bodies cannot pass the challenge — making every
+producer an archive node. The recall profiles set `recall_enabled` plus
+their depth; `powps-recall` uses production parameters
+(`recall_min_depth=100`), the SmallNet recall profiles use the relaxed
+depth (`recall_min_depth=30`).
 
 ---
 
 ## Choosing the right era
 
-### Production vs SmallNet
+### Production families and parameter profiles
 
-The seven authorities split into two families:
-
-**Production eras** — designed for permanent deployment and adversarial conditions:
+The four registered families serve permanent, adversarial deployment:
 
 | id | Authority | When to use |
 |----|-----------|-------------|
 | 1 | `PurePoWAuthority` | Default genesis era. Start any network here — minimal attack surface, any CPU mines from block 1. Activate era 2 when the community is ready to stake. |
 | 2 | `POWPStakeAuthority` | The standard production era. Adds slashable stake, stake-weighted random reward, and a demand-responsive base fee. Activate once a meaningful fraction of the community is prepared to stake. |
-| 4 | `PoAAuthority` | Mature-network governance milestone or consortium deployment requiring deterministic block timing. Activation-only — not genesis-able. |
-| 6 | `POWPStakeBlockRecallAuthority` | Adds Proof-of-Access storage accountability to era 2. Activate once the chain is at least `recall_min_depth=100` blocks deep and storage honesty must be protocol-enforced. |
+| 4 | `PoAAuthority` | Mature-network governance milestone or consortium deployment requiring deterministic block timing. Genesis-able, or reached via activation. |
+| 8 | `PoSAuthority` | Pure Proof-of-Stake — slot-based, no mining. Deterministic stake-weighted slot leader election, delegation pools. Genesis-able. |
 
-**SmallNet variants** — identical consensus logic, relaxed parameters for development and testing:
+**SmallNet and recall profiles** — identical consensus logic, relaxed
+or recall-enabled parameters, selected via `CONSENSUS_GENESIS_PROFILE`:
 
-| id | Authority | Use for |
-|----|-----------|---------|
-| 3 | `POWPStakeSmallNetAuthority` | Local dev, Docker sim, CI. Low `min_stake`, short `unbonding_window`, rapid difficulty retarget. |
-| 5 | `POWPStakeBlockRecallSmallNetAuthority` | Testing recall + stake mechanics together (`recall_min_depth=30`). Mirrors era 6 at low block heights. |
-| 7 | `POWBlockRecallSmallNetAuthority` | Testing recall in isolation from stake. Pure PoW + recall, no staking overhead. Useful for diagnosing recall-specific issues. |
+| Profile | Family + params | Use for |
+|---|---|---|
+| `powps-smallnet` | id 2 + SmallNet | Local dev, Docker sim, CI. Low `min_stake`, short `unbonding_window`, rapid difficulty retarget. |
+| `powps-recall-smallnet` | id 2 + recall + SmallNet | Testing recall + stake mechanics together (`recall_min_depth=30`). |
+| `powps-recall` | id 2 + recall (production) | Production recall — Proof-of-Access storage accountability on era 2 (`recall_min_depth=100`). |
+| `pow-recall-smallnet` | id 1 + recall + SmallNet | Testing recall in isolation from stake. Pure PoW + recall, no staking overhead. |
 
 **Never deploy SmallNet parameters in production.** `min_stake=1 TESC`, `unbonding_window=50`, and `min_miners=2` are deliberately weak — an adversary with a single TESC can participate in all stake-dependent mechanisms from block 1.
 
@@ -124,13 +147,13 @@ Most networks follow this sequence:
 
 ```
 era 1 (PurePoW)  →  era 2 (POWP-Stake)  →  era 4 (PoA)
-                                          →  era 6 (block recall)
+                                          →  era 2 + recall profile
 ```
 
 1. **Genesis on era 1** — any CPU can mine, staking infrastructure is not yet required.
 2. **Activate era 2** — staking, slashing, and random rewards engage. Announcement + code deploy required on all nodes before the activation tx is signed.
-3. **Optionally activate era 4** — when block predictability matters more than decentralised production (consortium ledger, governance milestone). Activation-only.
-4. **Optionally activate era 6** — when the chain is deep enough for recall targets and storage accountability must be enforced by the protocol.
+3. **Optionally activate era 4** — when block predictability matters more than decentralised production (consortium ledger, governance milestone).
+4. **Optionally enable the recall profile** — activate era 2 with `recall_enabled` (the `powps-recall` parameter set) when the chain is deep enough for recall targets and storage accountability must be enforced by the protocol. Block recall is a parameter profile on the stake family, not a separate era.
 
 Each activation is a single `consensus_activation` transaction co-signed by the founding multisig at a scheduled block height — no coordinated software upgrade, no community schism, no hard fork. Activations are one-way; plan the target era and activation height with sufficient lead time.
 
@@ -232,7 +255,7 @@ from .consensus_powp import POWPAuthority, POWP_DEFAULT_PARAMS
 
 @register_consensus
 class POWPv2Authority(POWPAuthority):
-    id = 3
+    id = 16   # a fresh id outside the four registered families (1, 2, 4, 8)
 ```
 
 For new mining or fork-choice logic, subclass `ConsensusAuthority` directly
@@ -266,14 +289,14 @@ Response (excerpt):
 ```json
 {
   "peers": {
-    "tesc1...alice": [1, 2, 3, 4],
-    "tesc1...bob":   [1, 2, 3, 4],
-    "tesc1...carol": [1, 2],            // outdated — missing 3 and 4
-    "tesc1...dan":   [1, 2, 3, 4]
+    "tesc1...alice": [1, 2, 4, 8, 16],
+    "tesc1...bob":   [1, 2, 4, 8, 16],
+    "tesc1...carol": [1, 2, 4, 8],      // outdated — missing 16
+    "tesc1...dan":   [1, 2, 4, 8, 16]
   },
-  "pending_consensus_ids": [4],
+  "pending_consensus_ids": [16],
   "missing_for_pending": {
-    "tesc1...carol": [4]                // ABORT: do not sign yet
+    "tesc1...carol": [16]               // ABORT: do not sign yet
   },
   "discovery_available": true
 }
@@ -304,7 +327,7 @@ then capture the hash to bake into the activation tx:
 ```bash
 for port in 8001 8002 8003 8004; do
     echo "node-$port: $(curl -s http://localhost:$port/authority-attestations \
-        | python -c "import sys, json; d=json.load(sys.stdin); print(d['attestations'].get('4', {}))")"
+        | python -c "import sys, json; d=json.load(sys.stdin); print(d['attestations'].get('16', {}))")"
 done
 ```
 
@@ -331,7 +354,7 @@ depending on what the active era's params declare:
 
 ```python
 tx = node.build_consensus_activation_tx(
-    consensus_id=3,
+    consensus_id=16,   # the POWPv2Authority from Step 1
     activation_height=node._get_tip_height() + 200,
     params_json=new_params.to_json(),
     owner_wallet=node.wallet,
@@ -354,7 +377,7 @@ On each signer's machine:
 # hex line — the signature. Use the @PATH form so the key never
 # touches shell history.
 python scripts/sign_activation.py \
-    --consensus-id 3 \
+    --consensus-id 16 \
     --activation-height 250 \
     --params-json /path/to/new_params.json \
     --nonce 1 \
@@ -378,7 +401,7 @@ sig_b = "9f8e7d6c..."  # from signer B
 # The coordinator's own wallet wraps the outer tx; its pubkey must be
 # in the era's owner set (any owner can be the originator).
 tx = node.build_consensus_activation_tx(
-    consensus_id=3,
+    consensus_id=16,   # the POWPv2Authority from Step 1
     activation_height=node._get_tip_height() + 200,
     params_json=new_params_string,    # byte-identical to what signers used
     nonce=1,
@@ -396,7 +419,7 @@ objects directly:
 
 ```python
 tx = node.build_consensus_activation_tx(
-    consensus_id=3,
+    consensus_id=16,   # the POWPv2Authority from Step 1
     activation_height=node._get_tip_height() + 200,
     params_json=new_params.to_json(),
     owner_wallets=[wallet_a, wallet_b],   # ≥ threshold signers
@@ -438,7 +461,7 @@ curl -s http://localhost:8001/pending-activations | python -m json.tool
   "pending": [
     {
       "activation_height": 305,
-      "consensus_id": 3,
+      "consensus_id": 16,
       "params_json": "...",
       "activation_txid": "fc_a1b2c3...",
       "activated_by": "owner"

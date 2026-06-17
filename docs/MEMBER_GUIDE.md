@@ -5,7 +5,7 @@ by its operator (the person who runs it for the group). This guide
 explains how to receive, hold, and send funds on the chain — no
 prior crypto experience assumed.
 
-For the underlying technology, see the [Tesseracoin landing page](../website/index.html).
+For the underlying technology, see the [Tesseracoin landing page](https://tesseracoin.com/).
 For running a cluster, see [`OPERATOR_GUIDE.md`](OPERATOR_GUIDE.md).
 
 ---

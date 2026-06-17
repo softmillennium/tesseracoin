@@ -148,21 +148,31 @@ Each authority bundle is registered with `@register_consensus(id=N)` and activat
 
 ### Registered eras
 
+Four registered consensus families — the only valid `consensus_id` values:
+
 | id | Authority | Purpose |
 |----|-----------|--------|
-| 1 | `PurePoWAuthority` | SHA-256 PoW only; full coinbase to miner; no stake layer. Phase 1 genesis era. |
-| 2 | `POWPStakeAuthority` | PoW + locked slashable stake + stake-weighted random reward + demand-responsive base fee. Production era. |
-| 3 | `POWPStakeSmallNetAuthority` | Era 2 rules with relaxed params for sim/chaos testing. |
-| 4 | `PoAAuthority` | Owner-signed blocks; no PoW. Activation-only (not genesis-able). |
-| 5 | `POWPStakeBlockRecallSmallNetAuthority` | Era 3 + Proof-of-Access block recall. |
-| 6 | `POWPStakeBlockRecallAuthority` | Era 2 + Proof-of-Access block recall. Production activation target. |
-| 7 | `POWBlockRecallSmallNetAuthority` | Pure PoW SmallNet + block recall; no stake. |
+| 1 | `PurePoWAuthority` | SHA-256 PoW only; full coinbase to miner; no stake layer. Phase 1 genesis era. Genesis-able. |
+| 2 | `POWPStakeAuthority` | PoW + locked slashable stake + stake-weighted random reward + demand-responsive base fee. Production era. Genesis-able. |
+| 4 | `PoAAuthority` | Owner-signed blocks; no PoW. For governance milestones or consortium deployment. Genesis-able, or reached via activation. |
+| 8 | `PoSAuthority` | Pure Proof-of-Stake — slot-based deterministic stake-weighted leader election; no mining. Delegation pools, optional inactivity eviction, top-N active set. Genesis-able. |
+
+### Parameter profiles (SmallNet and block recall)
+
+SmallNet (relaxed gates and fast cadence) and block recall (Proof-of-Access storage accountability) are not distinct eras — they are parameter profiles layered on a family, selected at genesis via the env `CONSENSUS_GENESIS_PROFILE=<name>`:
+
+| Profile | Family + params |
+|---------|-----------------|
+| `powps-smallnet` | id 2 + SmallNet params |
+| `powps-recall-smallnet` | id 2 + recall + SmallNet |
+| `powps-recall` | id 2 + recall (production params) |
+| `pow-recall-smallnet` | id 1 + recall + SmallNet |
 
 ---
 
-## Proof-of-Access Block Recall (Eras 5, 6, 7)
+## Proof-of-Access Block Recall (recall profiles)
 
-When block recall is active, each miner must prove it holds the body of a specific past block:
+When a recall profile is active, each miner must prove it holds the body of a specific past block:
 
 ```
 recall_height = f(prev_block_hash, nonce, tip_height, activation_height, recall_min_depth)
