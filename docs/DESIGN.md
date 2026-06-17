@@ -214,10 +214,10 @@ The gossip crawl is the mechanism by which a node seeded with only one known pee
 
 ## Open Questions
 
-1. **Librarian incentives** — archival nodes (those serving block bodies for recall) have no explicit reward beyond the ability to mine recall-era blocks. A direct librarian fee per body served would strengthen the archival incentive.
+1. **Sybil resistance in peer discovery** — the peer store and gossip crawl have no subnet diversity enforcement. An adversary controlling the discovery service can eclipse a newly joining node by populating its peer list exclusively with adversary-controlled nodes. Countermeasure: bucket peers by /16 and cap per-bucket entries.
 
-2. **Sybil resistance in peer discovery** — the peer store and gossip crawl have no subnet diversity enforcement. An adversary controlling the discovery service can eclipse a newly joining node by populating its peer list exclusively with adversary-controlled nodes. Countermeasure: bucket peers by /16 and cap per-bucket entries.
+2. **Random reward distribution** — stake-weighted random reward is regressive: larger stakers receive proportionally more. Alternative: uniform random selection over all stakers above the minimum threshold, regardless of stake size.
 
-3. **Random reward distribution** — stake-weighted random reward is regressive: larger stakers receive proportionally more. Alternative: uniform random selection over all stakers above the minimum threshold, regardless of stake size.
+3. **Era activation governance** — the founding multisig approach is simple but centralised. Stake-weighted voting (where activation requires a threshold of locked stake weight, not just M-of-N key holders) would distribute governance more broadly.
 
-4. **Era activation governance** — the founding multisig approach is simple but centralised. Stake-weighted voting (where activation requires a threshold of locked stake weight, not just M-of-N key holders) would distribute governance more broadly.
+(Resolved since the first draft: **librarian incentives** — archival/librarian nodes now earn a direct reward. In the recall profiles and Pure PoS, the burned base-fee half is redirected to the stake-bonded librarians, ∝ their storage weight, accrued and claimed via `withdraw_rewards`.)

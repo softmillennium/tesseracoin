@@ -80,11 +80,16 @@ to stay live and converged even as nodes join, leave, restart, and misbehave —
 is exercised that way continuously against simulated adversaries, partitions, and
 restarts before anything ships.
 
-**Adaptive economics.** Transaction fees rise gently with demand while difficulty
-adjusts automatically — keeping participation accessible as the network grows. Half
-of all collected fees are burned, gently tightening supply over time.
+**Where the value flows.** Most of a block's reward is the producer's coinbase; a
+stake-weighted **random reward** is sliced off to an *active participant* every block.
+The demand-responsive base fee is partly **burned** (net deflation) and partly
+**redirected to the librarians** who keep the full history. And it all plays out on a
+fixed, predictable schedule — the block reward halves every 2,000,000 blocks, with total
+supply approaching a hard cap of 1,000,000,000 TESC.
 
-<p align="center"><img src="assets/economics.png" alt="Adaptive fee curves and supply burn" width="620"></p>
+<p align="center"><img src="assets/reward_split.png" alt="Block reward split in the POWP-Stake era — 90% producer coinbase, 10% stake-weighted random reward to an active participant" width="560"></p>
+<p align="center"><img src="assets/supply.png" alt="Circulating supply rising to the 1,000,000,000 TESC hard cap, with the block reward halving every 2,000,000 blocks" width="620"></p>
+<p align="center"><img src="assets/fee_split.png" alt="Where the demand-responsive base fee goes — half to the producer, and either destroyed (deflation) or redirected to librarians in recall mode" width="620"></p>
 
 **Built for the post-quantum era — without the storage blow-up.** Quantum-safe
 signatures are large, and naively that makes every node's storage balloon. Tesseracoin
