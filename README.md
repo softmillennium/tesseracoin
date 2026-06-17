@@ -87,7 +87,7 @@ The demand-responsive base fee is partly **burned** (net deflation) and partly
 fixed, predictable schedule — the block reward halves every 2,000,000 blocks, with total
 supply approaching a hard cap of 1,000,000,000 TESC.
 
-<p align="center"><img src="assets/reward_split.png" alt="Block reward split in the POWP-Stake era — 90% producer coinbase, 10% stake-weighted random reward to an active participant" width="560"></p>
+<p align="center"><img src="assets/reward_split.png" alt="Block reward split in the POWP-Stake era — 90% producer coinbase, 10% stake-weighted random reward to an active participant" width="620"></p>
 <p align="center"><img src="assets/supply.png" alt="Circulating supply rising to the 1,000,000,000 TESC hard cap, with the block reward halving every 2,000,000 blocks" width="620"></p>
 <p align="center"><img src="assets/fee_split.png" alt="Where the demand-responsive base fee goes — half to the producer, and either destroyed (deflation) or redirected to librarians in recall mode" width="620"></p>
 
